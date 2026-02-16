@@ -1,0 +1,8 @@
+feedparser
+youtube-transcript-api
+google-generativeai
+python-dotenv
+requests
+beautifulsoup4
+markdown
+notion-client

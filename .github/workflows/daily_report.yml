@@ -1,0 +1,36 @@
+name: Daily YouTube Report
+
+on:
+  schedule:
+    # 9:00 AM KST is 00:00 UTC
+    - cron: '0 0 * * *'
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Run Report Generator
+      env:
+        GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+        NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+        NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
+        EMAIL_SENDER: ${{ secrets.EMAIL_SENDER }}
+        EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+        EMAIL_RECIPIENT: ${{ secrets.EMAIL_RECIPIENT }}
+      run: |
+        python main.py --hours 24

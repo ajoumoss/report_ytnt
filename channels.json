@@ -1,0 +1,44 @@
+[
+    {
+        "name": "열린공감TV",
+        "channel_id": "UC4y2Jx26qCb7CrSt_i5bf1A",
+        "political_leaning": "Unknown",
+        "max_videos": 3
+    },
+    {
+        "name": "펜앤마이크TV",
+        "channel_id": "UCOqCunaF9qVN8bXwsK0HT3g",
+        "political_leaning": "Unknown",
+        "max_videos": 3
+    },
+    {
+        "name": "고성국TV",
+        "channel_id": "UCM8BcGB6BWKq3utIMhGKnUA",
+        "political_leaning": "Unknown",
+        "max_videos": 3
+    },
+    {
+        "name": "매일신문",
+        "channel_id": "UCGrraKQiTF-ml0KqPQ8mrUA",
+        "political_leaning": "Unknown",
+        "max_videos": 3
+    },
+    {
+        "name": "GROUND C 그라운드씨",
+        "channel_id": "UClUlAMZGEGPn8mKemiwOjzg",
+        "political_leaning": "Unknown",
+        "max_videos": 3
+    },
+    {
+        "name": "김어준의 겸손은힘들다 뉴스공장",
+        "channel_id": "UCAAvO0ehWox1bbym3rXKBZw",
+        "political_leaning": "Unknown",
+        "max_videos": 3
+    },
+    {
+        "name": "장르만 여의도",
+        "channel_id": "UCsqWTNmoaNPvsfeCgaD7BpQ",
+        "political_leaning": "Unknown",
+        "max_videos": 3
+    }
+]

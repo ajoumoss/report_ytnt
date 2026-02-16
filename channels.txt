@@ -1,0 +1,30 @@
+# YouTube Channels List
+# 
+# 1. To add a new channel: Just paste the YouTube URL at the bottom.
+#    Example: https://www.youtube.com/@SomeChannel
+#
+# 2. Existing Channels (Advanced Format):
+#    Name | URL or ID | Leaning | MaxVideos
+
+https://www.youtube.com/@openmindTV11
+https://www.youtube.com/@penn1TV
+https://www.youtube.com/@%EA%B3%A0%EC%84%B1%EA%B5%ADTV
+https://www.youtube.com/@maeilnews
+https://www.youtube.com/@groundc
+https://www.youtube.com/@gyeomsonisnothing
+https://www.youtube.com/@JTBCSHOW
+https://www.youtube.com/@maebulshow
+https://www.youtube.com/@%EC%96%B4%EB%B2%A4%EC%A0%80%EC%8A%A4%EC%A0%84%EB%9E%B5%ED%9A%8C%EC%9D%98
+https://www.youtube.com/@eqlife
+https://www.youtube.com/@newtamsa
+https://www.youtube.com/@%EC%9C%A4PD%EC%9E%85%EB%8B%88%EB%8B%A4
+https://www.youtube.com/@tubeshin
+https://www.youtube.com/@sisatapanews
+https://www.youtube.com/@hongtv
+https://www.youtube.com/@1waynews-jhg
+https://www.youtube.com/@%EA%B9%A8%EC%8B%9C%EC%97%B0tv.2min9
+https://www.youtube.com/@RedOUTT
+https://www.youtube.com/@%EB%B3%B4%EC%88%98%EB%AF%B8TV
+https://www.youtube.com/@KNL
+https://www.youtube.com/@%EB%B9%A8%EB%8C%80%EC%99%95
+https://www.youtube.com/@%ED%95%9C%EB%8F%99%ED%9B%88%EC%9E%85%EB%8B%88%EB%8B%A4
