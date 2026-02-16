@@ -1,11 +1,3 @@
-# YouTube Channels List
-# 
-# 1. To add a new channel: Just paste the YouTube URL at the bottom.
-#    Example: https://www.youtube.com/@SomeChannel
-#
-# 2. Existing Channels (Advanced Format):
-#    Name | URL or ID | Leaning | MaxVideos
-
 https://www.youtube.com/@openmindTV11
 https://www.youtube.com/@penn1TV
 https://www.youtube.com/@%EA%B3%A0%EC%84%B1%EA%B5%ADTV
