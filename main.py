@@ -216,7 +216,12 @@ def main():
         limit = channel.get('max_videos', None)
         print(f"Checking channel: {channel['name']} ({channel.get('political_leaning', 'N/A')}) - Last {lookback} hours (Limit: {limit})...")
         
-        videos = get_recent_videos(channel['channel_id'], hours=lookback, limit=limit)
+        videos = get_recent_videos(
+            channel['channel_id'], 
+            hours=lookback, 
+            limit=limit,
+            api_key=os.getenv('GOOGLE_API_KEY')
+        )
         total_found += len(videos)
         
         for video in videos:
