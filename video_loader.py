@@ -53,6 +53,10 @@ def download_video(video_url, output_path="temp_video"):
             return files[0]
         return None
     except Exception as e:
+        err_msg = str(e)
+        if "rate-limited" in err_msg.lower() or "429" in err_msg or "Sign in to confirm you’re not a bot" in err_msg:
+             print(f"  [CRITICAL] YouTube block detected: {err_msg}")
+             return "RATE_LIMITED"
         print(f"  Download failed: {e}")
         return None
 
@@ -94,6 +98,10 @@ def download_audio(video_url, output_path="temp_audio"):
             return files[0]
         return None
     except Exception as e:
+        err_msg = str(e)
+        if "rate-limited" in err_msg.lower() or "429" in err_msg or "Sign in to confirm you’re not a bot" in err_msg:
+             print(f"  [CRITICAL] YouTube block detected during audio download: {err_msg}")
+             return "RATE_LIMITED"
         print(f"  Audio download failed: {e}")
         return None
 
@@ -255,6 +263,10 @@ def download_subtitles_text(video_url):
         return full_text
         
     except Exception as e:
+        err_msg = str(e)
+        if "rate-limited" in err_msg.lower() or "429" in err_msg or "Sign in to confirm you’re not a bot" in err_msg:
+             print(f"  [CRITICAL] YouTube block detected during subtitle fetch: {err_msg}")
+             return "RATE_LIMITED"
         print(f"  Subtitle download failed: {e}")
         return None
 

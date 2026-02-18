@@ -213,7 +213,10 @@ def main():
     for channel in channels:
         # Determine lookback hours: use channel specific if exists, else argument default
         lookback = channel.get('lookback_hours', args.hours)
-        limit = channel.get('max_videos', None)
+        limit = channel.get('max_videos', 5) # Default to 5 to avoid IP blocks
+        if args.filter: # If manually filtering, maybe show more
+             limit = channel.get('max_videos', None)
+             
         print(f"Checking channel: {channel['name']} ({channel.get('political_leaning', 'N/A')}) - Last {lookback} hours (Limit: {limit})...")
         
         videos = get_recent_videos(
@@ -231,14 +234,28 @@ def main():
                 video['channel_title'] = channel['name']
                 
             print(f"  Found video: {video['title']}")
+            
+            # 0. RANDOM DELAY to mimic human behavior and avoid bot detection
+            import random
+            delay = random.uniform(5, 15)
+            print(f"  [ANTI-BOT] Waiting {delay:.1f}s before processing...")
+            time.sleep(delay)
+            
             print(f"  Fetching transcript...")
             transcript = get_transcript(video['video_id'])
             
-            if not transcript:
-                # 2. If Transcript Fails, Try Smart Fallback
-                print("  No transcript found. Checking video details...")
-                
-                import video_loader
+            # Check for Rate Limit signal from transcript fetcher
+            is_blocked = (transcript == "RATE_LIMITED")
+            
+            if not transcript or is_blocked:
+                # 2. If Transcript Fails OR we are blocked, handle fallbacks
+                if is_blocked:
+                    print(f"  [CRITICAL] YouTube block detected during transcript fetching. Skipping other methods for this video.")
+                    result = {"is_political": True, "summary": "Technical Failure: YouTube's bot detection blocked the transcript request (Rate Limit).", "political_leaning": "Analysis Failed", "analysis_failed": True}
+                else:
+                    print("  No transcript found. Checking video details...")
+                    
+                    import video_loader
                 
                 # Check Duration First
                 video_info = video_loader.get_video_info(video['link'])
@@ -269,21 +286,29 @@ def main():
                                  use_multimodal = False # Trigger fallback
                     
                     # Fallback to Subtitles (if Long OR Multimodal Failed)
-                    if not use_multimodal or not result or (isinstance(result, dict) and result.get('political_leaning') == "Error"):
+                    if (not use_multimodal or not result or (isinstance(result, dict) and result.get('political_leaning') == "Error")) and not is_blocked:
                         if not use_multimodal:
                             print("  Fetching subtitles via yt-dlp...")
                         else:
                             print("  Multimodal failed. Falling back to subtitles...")
                             
                         forced_transcript = video_loader.download_subtitles_text(video['link'])
-                        if forced_transcript:
+                        if forced_transcript == "RATE_LIMITED":
+                            is_blocked = True
+                            print("  [CRITICAL] Rate limit detected during subtitle download.")
+                            result = {"is_political": True, "summary": "Technical Failure: YouTube's bot detection blocked the subtitle request (Rate Limit).", "political_leaning": "Analysis Failed", "analysis_failed": True}
+                        elif forced_transcript:
                             print("  Subtitles downloaded successfully.")
                             result = summarize_transcript(forced_transcript, video['title'])
                         else:
                             print("  Could not get subtitles. Attempting Audio-Only Analysis (Last Resort)...")
                             # Audio-Only Fallback
                             audio_file = video_loader.process_audio(video['link'])
-                            if audio_file:
+                            if audio_file == "RATE_LIMITED":
+                                is_blocked = True
+                                print("  [CRITICAL] Rate limit detected during audio download.")
+                                result = {"is_political": True, "summary": "Technical Failure: YouTube's bot detection blocked the audio request (Rate Limit).", "political_leaning": "Analysis Failed", "analysis_failed": True}
+                            elif audio_file:
                                 print("  Audio uploaded. Analyzing audio content...")
                                 result = summarize_video(audio_file, video['title'])
                             else:

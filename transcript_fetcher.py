@@ -43,6 +43,10 @@ def get_transcript(video_id):
         text_transcript = formatter.format_transcript(transcript_list_of_dicts)
         return text_transcript
     except Exception as e:
+        err_msg = str(e)
+        if "TooManyRequests" in type(e).__name__ or "429" in err_msg or "Sign in to confirm you’re not a bot" in err_msg:
+            print(f"  [CRITICAL] YouTube transcript rate limit detected: {err_msg}")
+            return "RATE_LIMITED"
         print(f"Error fetching transcript for {video_id}: {e}")
         return None
 
