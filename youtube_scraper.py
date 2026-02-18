@@ -104,6 +104,57 @@ def is_short(video_id):
     except:
         return False
 
+import googleapiclient.discovery
+
+def get_recent_videos_api(channel_id, api_key, hours=24, limit=10):
+    """
+    Fetches videos using the official YouTube Data API v3.
+    This is the most reliable method in cloud environments like GitHub Actions.
+    """
+    print(f"  [API] Fetching videos via YouTube Data API for {channel_id}...")
+    try:
+        youtube = googleapiclient.discovery.build("youtube", "v3", developerKey=api_key)
+        
+        # Calculate time cutoff
+        now = datetime.datetime.now(pytz.utc)
+        published_after = (now - datetime.timedelta(hours=hours)).isoformat()
+        
+        # Search for recent videos
+        request = youtube.search().list(
+            part="snippet",
+            channelId=channel_id,
+            order="date",
+            publishedAfter=published_after,
+            maxResults=limit,
+            type="video"
+        )
+        response = request.execute()
+        
+        found_videos = []
+        profile_pic, sub_count = get_channel_profile_pic(channel_id)
+        
+        for item in response.get('items', []):
+            vid_id = item['id']['videoId']
+            snippet = item['snippet']
+            
+            found_videos.append({
+                'video_id': vid_id,
+                'title': snippet['title'],
+                'link': f"https://www.youtube.com/watch?v={vid_id}",
+                'published': snippet['publishedAt'],
+                'channel_title': snippet['channelTitle'],
+                'channel_profile_pic': profile_pic,
+                'subscriber_count': sub_count,
+                'view_count': 0 # Search response doesn't include views directly
+            })
+            
+        print(f"  [API] Successfully found {len(found_videos)} videos.")
+        return found_videos
+        
+    except Exception as e:
+        print(f"  [API] Error: {e}")
+        return []
+
 def scrape_videos_fallback(channel_id, hours=24):
     print(f"⚠️  RSS failed for {channel_id}, trying HTML scraping...")
     url = f"https://www.youtube.com/channel/{channel_id}/videos"
@@ -289,15 +340,22 @@ def scrape_ytdlp(channel_id, hours=24, limit=10):
                 
     return found_videos
 
-def get_recent_videos(channel_id, hours=24, limit=None):
+def get_recent_videos(channel_id, hours=24, limit=None, api_key=None):
     """
     Fetches videos uploaded in the last 'hours' from a YouTube channel.
     Order of preference:
-    1. RSS Feed (Fastest, but blocked by Github Actions)
-    2. yt-dlp (Robust, uses Android API)
-    3. HTML Scraping (Fallback)
+    1. YouTube Data API (Official, extremely stable)
+    2. RSS Feed (Fastest, prone to blocking)
+    3. yt-dlp UU-Playlist (Robust fallback)
+    4. HTML Scraping (Last resort)
     """
-    # 1. Try RSS
+    # 1. Try Official API if key is provided
+    if api_key:
+        api_videos = get_recent_videos_api(channel_id, api_key, hours, limit or 10)
+        if api_videos:
+            return api_videos
+
+    # 2. Try RSS
     try:
         current_videos = []
         rss_url = f"https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}"
@@ -308,16 +366,10 @@ def get_recent_videos(channel_id, hours=24, limit=None):
         if hasattr(feed, 'status') and feed.status == 404:
             rss_ok = False
         elif len(feed.entries) == 0:
-             # Check if truly empty or broken
              if 'title' not in feed.feed or feed.feed.title == "YouTube": 
                  rss_ok = False
                  
         if rss_ok:
-            # ... (Existing RSS parsing logic) ...
-            # Reuse the loop from before, but abstracted?
-            # For minimal change, I'll copy the logic back or refactor slightly.
-            # Let's keep existing logic but wrapped.
-            
             now = datetime.datetime.now(pytz.utc)
             profile_pic, sub_count = get_channel_profile_pic(channel_id)
             
@@ -330,7 +382,6 @@ def get_recent_videos(channel_id, hours=24, limit=None):
                     time_diff = (now - published).total_seconds()
                     if time_diff < hours * 3600:
                         if is_short(entry.yt_videoid):
-                            print(f"  Skipping Short: {entry.title}")
                             continue
 
                         view_count = ""
@@ -350,30 +401,25 @@ def get_recent_videos(channel_id, hours=24, limit=None):
                 except:
                     continue
             
-            # If we found videos, return them. 
-            # If RSS was "ok" (200) but empty, it might be a valid channel with no recent videos.
-            # But on GH Actions, RSS often returns 403 Forbidden or similar which feedparser might mask or show as empty.
-            # So if empty, we MIGHT want to try fallback anyway just in case?
             if current_videos:
                 if limit: current_videos = current_videos[:limit]
                 return current_videos
             
-            print("  RSS returned 0 videos. Trying fallback to be sure...")
+            print("  RSS returned 0 videos. Trying fallback...")
 
     except Exception as e:
         print(f"  RSS failed: {e}")
 
-    # 2. Try yt-dlp (Strong Fallback)
+    # 3. Try yt-dlp (Robust Fallback)
     try:
         dlp_videos = scrape_ytdlp(channel_id, hours, limit)
         if dlp_videos:
-            print(f"  ✅ yt-dlp found {len(dlp_videos)} videos.")
             if limit: dlp_videos = dlp_videos[:limit]
             return dlp_videos
     except Exception as e:
         print(f"  yt-dlp fallback failed: {e}")
 
-    # 3. HTML Scraping (Last Resort)
+    # 4. HTML Scraping (Last Resort)
     videos = scrape_videos_fallback(channel_id, hours)
     if limit: videos = videos[:limit]
     return videos

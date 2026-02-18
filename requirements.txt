@@ -9,3 +9,4 @@ notion-client
 python-dateutil
 pytz
 yt-dlp>=2025.1.26
+google-api-python-client
