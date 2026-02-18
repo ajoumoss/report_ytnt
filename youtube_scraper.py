@@ -194,95 +194,92 @@ import yt_dlp
 def scrape_ytdlp(channel_id, hours=24, limit=10):
     """
     Scrapes videos using yt-dlp (Robust against bot detection).
-    Fetches both 'videos' (uploads) and 'streams' (live).
+    Uses the 'UU' playlist hack (All Uploads) which is much more stable.
     """
-    print(f"  Attempting yt-dlp scrape for {channel_id}...")
+    print(f"  Attempting yt-dlp UU-playlist scrape for {channel_id}...")
     
-    # We want valid videos within the time window. 
-    # Since yt-dlp flat extraction is fast, we can fetch a bit more and filter.
-    # We check /videos and /streams.
-    
-    urls = [
-        f"https://www.youtube.com/channel/{channel_id}/videos",
-        f"https://www.youtube.com/channel/{channel_id}/streams"
-    ]
+    # UU Playlist Hack: Replace 'UC' with 'UU' in channel ID
+    # Valid for all channels. UU = All Uploads playlist.
+    if channel_id.startswith('UC'):
+        playlist_id = 'UU' + channel_id[2:]
+    else:
+        playlist_id = channel_id # Fallback
+        
+    url = f"https://www.youtube.com/playlist?list={playlist_id}"
     
     found_videos = []
-    seen_ids = set()
     now = datetime.datetime.now(pytz.utc)
     cutoff = now - datetime.timedelta(hours=hours)
     
     ydl_opts = {
         'quiet': True,
         'extract_flat': 'in_playlist',
-        'playlistend': 10,
+        'playlistend': limit * 2 if limit else 30, # Check enough to find recent ones
         'ignoreerrors': True,
+        'no_warnings': True,
         'extractor_args': {'youtube': {'player_client': ['android', 'ios']}},
     }
     
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        for url in urls:
-            try:
-                info = ydl.extract_info(url, download=False)
-                if not info or 'entries' not in info:
-                    continue
-                    
-                for entry in info['entries']:
-                    if not entry: continue
-                    
-                    vid_id = entry.get('id')
-                    if not vid_id or vid_id in seen_ids:
-                        continue
-                        
-                    title = entry.get('title')
-                    
-                    # Date Handling
-                    upload_date_str = entry.get('upload_date')
-                    timestamp = entry.get('timestamp')
-                    
-                    video_date = None
+        try:
+            info = ydl.extract_info(url, download=False)
+            if not info or 'entries' not in info:
+                print(f"    No entries found for playlist {playlist_id}")
+                return []
+                
+            for entry in info['entries']:
+                if not entry: continue
+                
+                vid_id = entry.get('id')
+                title = entry.get('title')
+                
+                # Date Handling
+                upload_date_str = entry.get('upload_date')
+                timestamp = entry.get('timestamp')
+                
+                video_date = None
+                if timestamp:
+                    video_date = datetime.datetime.fromtimestamp(timestamp, pytz.utc)
+                elif upload_date_str:
+                     try:
+                         video_date = datetime.datetime.strptime(upload_date_str, "%Y%m%d").replace(tzinfo=pytz.utc)
+                     except:
+                         pass
+                
+                is_recent = False
+                if video_date:
                     if timestamp:
-                        video_date = datetime.datetime.fromtimestamp(timestamp, pytz.utc)
-                    elif upload_date_str:
-                         try:
-                             video_date = datetime.datetime.strptime(upload_date_str, "%Y%m%d").replace(tzinfo=pytz.utc)
-                         except:
-                             pass
-                    
-                    is_recent = False
-                    if video_date:
-                        if timestamp:
-                            if video_date >= cutoff:
-                                is_recent = True
-                        else:
-                            # Date only - grant 2 days buffer for safety
-                            if video_date.date() >= cutoff.date() - datetime.timedelta(days=1):
-                                is_recent = True
-                    else:
-                        # If date is missing (sometimes on flat extract),
-                        # assume the top 3 are recent enough to check.
-                        if len(seen_ids) < 3:
+                        if video_date >= cutoff:
                             is_recent = True
-                            video_date = now # Placeholder
+                    else:
+                        # Date only - grant 2 days buffer for safety (timezone/rounding)
+                        if video_date.date() >= cutoff.date() - datetime.timedelta(days=1):
+                            is_recent = True
+                else:
+                    # If date is missing (common with flat extract), 
+                    # check first few items since entries are sorted by new.
+                    if len(found_videos) < 3:
+                        is_recent = True
+                        video_date = now # Placeholder
 
-                    if is_recent:
-                        # Fetch profile pic (cached)
-                        profile_pic, sub_count = get_channel_profile_pic(channel_id)
+                if is_recent:
+                    profile_pic, sub_count = get_channel_profile_pic(channel_id)
+                    found_videos.append({
+                        'video_id': vid_id,
+                        'title': title,
+                        'link': f"https://www.youtube.com/watch?v={vid_id}",
+                        'published': video_date.isoformat() if video_date else now.isoformat(),
+                        'channel_title': info.get('uploader') or "Unknown",
+                        'channel_profile_pic': profile_pic,
+                        'subscriber_count': sub_count,
+                        'view_count': entry.get('view_count') or 0
+                    })
+                    
+                    if limit and len(found_videos) >= limit:
+                        break
                         
-                        found_videos.append({
-                            'video_id': vid_id,
-                            'title': title,
-                            'link': f"https://www.youtube.com/watch?v={vid_id}",
-                            'published': video_date.isoformat() if video_date else now.isoformat(),
-                            'channel_title': entry.get('uploader') or info.get('uploader') or "Unknown",
-                            'channel_profile_pic': profile_pic,
-                            'subscriber_count': sub_count,
-                            'view_count': entry.get('view_count') or 0
-                        })
-                        seen_ids.add(vid_id)
-                        
-            except Exception as e:
-                print(f"  yt-dlp error for {url}: {e}")
+        except Exception as e:
+            print(f"    yt-dlp UU-playlist error: {e}")
                 
     return found_videos
 
