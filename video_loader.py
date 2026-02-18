@@ -34,18 +34,22 @@ def download_video(video_url, output_path="temp_video"):
         'extractor_args': {'youtube': {'player_client': ['web', 'android', 'ios']}},
     }
 
-    # Add po_token if available (Bypass severe bot detection)
-    po_token = os.getenv("YOUTUBE_PO_TOKEN")
-    if po_token:
-        print(f"  [DEBUG] Applying po_token to yt-dlp request...")
-        ydl_opts['extractor_args']['youtube']['po_token'] = [f"web+{po_token}"]
-
-    # Add cookies if cookies.txt exists
-    if os.path.exists('cookies.txt'):
+    # Prioritize OAuth2 Cache if available
+    if os.path.exists('yt_auth_cache'):
+        print("  [DEBUG] Using OAuth2 Cache for authentication.")
+        ydl_opts['cache_dir'] = 'yt_auth_cache'
+    
+    # Fallback to cookies if cookies.txt exists and no OAuth2
+    elif os.path.exists('cookies.txt'):
         ydl_opts['cookiefile'] = 'cookies.txt'
         print(f"  [DEBUG] Using cookies.txt for authentication. Size: {os.path.getsize('cookies.txt')} bytes")
+    # Fallback to po_token
+    elif os.getenv("YOUTUBE_PO_TOKEN"):
+         po_token = os.getenv("YOUTUBE_PO_TOKEN")
+         print(f"  [DEBUG] Applying po_token to yt-dlp request...")
+         ydl_opts['extractor_args']['youtube']['po_token'] = [f"web+{po_token}"]
     else:
-        print("  [DEBUG] cookies.txt NOT found for yt-dlp.")
+        print("  [DEBUG] No authentication method found (OAuth2/Cookies/PO Token).")
 
     print(f"  Downloading video for multimodal analysis: {video_url}...")
     try:
@@ -91,13 +95,14 @@ def download_audio(video_url, output_path="temp_audio"):
         'extractor_args': {'youtube': {'player_client': ['web', 'android', 'ios']}},
     }
 
-    # Add po_token if available
-    po_token = os.getenv("YOUTUBE_PO_TOKEN")
-    if po_token:
-        ydl_opts['extractor_args']['youtube']['po_token'] = [f"web+{po_token}"]
-
-    if os.path.exists('cookies.txt'):
+    # Prioritize OAuth2 Cache
+    if os.path.exists('yt_auth_cache'):
+        ydl_opts['cache_dir'] = 'yt_auth_cache'
+    elif os.path.exists('cookies.txt'):
         ydl_opts['cookiefile'] = 'cookies.txt'
+    elif os.getenv("YOUTUBE_PO_TOKEN"):
+        po_token = os.getenv("YOUTUBE_PO_TOKEN")
+        ydl_opts['extractor_args']['youtube']['po_token'] = [f"web+{po_token}"]
     
     print(f"  Downloading AUDIO only (token optimization): {video_url}...")
     try:
@@ -229,13 +234,14 @@ def download_subtitles_text(video_url):
         'extractor_args': {'youtube': {'player_client': ['web', 'android', 'ios']}},
     }
     
-    # Add po_token if available
-    po_token = os.getenv("YOUTUBE_PO_TOKEN")
-    if po_token:
-        ydl_opts['extractor_args']['youtube']['po_token'] = [f"web+{po_token}"]
-
-    if os.path.exists('cookies.txt'):
+    # Prioritize OAuth2 Cache
+    if os.path.exists('yt_auth_cache'):
+        ydl_opts['cache_dir'] = 'yt_auth_cache'
+    elif os.path.exists('cookies.txt'):
         ydl_opts['cookiefile'] = 'cookies.txt'
+    elif os.getenv("YOUTUBE_PO_TOKEN"):
+        po_token = os.getenv("YOUTUBE_PO_TOKEN")
+        ydl_opts['extractor_args']['youtube']['po_token'] = [f"web+{po_token}"]
     
     print(f"  Attempting to download subtitles via yt-dlp: {video_url}...")
     try:
