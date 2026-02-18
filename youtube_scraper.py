@@ -189,92 +189,197 @@ def scrape_videos_fallback(channel_id, hours=24):
         print(f"Error scraping HTML: {e}")
         return []
 
+import yt_dlp
+
+def scrape_ytdlp(channel_id, hours=24, limit=10):
+    """
+    Scrapes videos using yt-dlp (Robust against bot detection).
+    Fetches both 'videos' (uploads) and 'streams' (live).
+    """
+    print(f"  Attempting yt-dlp scrape for {channel_id}...")
+    
+    # We want valid videos within the time window. 
+    # Since yt-dlp flat extraction is fast, we can fetch a bit more and filter.
+    # We check /videos and /streams.
+    
+    urls = [
+        f"https://www.youtube.com/channel/{channel_id}/videos",
+        f"https://www.youtube.com/channel/{channel_id}/streams"
+    ]
+    
+    found_videos = []
+    seen_ids = set()
+    now = datetime.datetime.now(pytz.utc)
+    cutoff = now - datetime.timedelta(hours=hours)
+    
+    ydl_opts = {
+        'quiet': True,
+        'extract_flat': 'in_playlist',
+        'playlistend': 10,
+        'ignoreerrors': True,
+        'extractor_args': {'youtube': {'player_client': ['android', 'ios']}},
+    }
+    
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        for url in urls:
+            try:
+                info = ydl.extract_info(url, download=False)
+                if not info or 'entries' not in info:
+                    continue
+                    
+                for entry in info['entries']:
+                    if not entry: continue
+                    
+                    vid_id = entry.get('id')
+                    if not vid_id or vid_id in seen_ids:
+                        continue
+                        
+                    title = entry.get('title')
+                    
+                    # Date Handling
+                    upload_date_str = entry.get('upload_date')
+                    timestamp = entry.get('timestamp')
+                    
+                    video_date = None
+                    if timestamp:
+                        video_date = datetime.datetime.fromtimestamp(timestamp, pytz.utc)
+                    elif upload_date_str:
+                         try:
+                             video_date = datetime.datetime.strptime(upload_date_str, "%Y%m%d").replace(tzinfo=pytz.utc)
+                         except:
+                             pass
+                    
+                    is_recent = False
+                    if video_date:
+                        if timestamp:
+                            if video_date >= cutoff:
+                                is_recent = True
+                        else:
+                            # Date only - grant 2 days buffer for safety
+                            if video_date.date() >= cutoff.date() - datetime.timedelta(days=1):
+                                is_recent = True
+                    else:
+                        # If date is missing (sometimes on flat extract),
+                        # assume the top 3 are recent enough to check.
+                        if len(seen_ids) < 3:
+                            is_recent = True
+                            video_date = now # Placeholder
+
+                    if is_recent:
+                        # Fetch profile pic (cached)
+                        profile_pic, sub_count = get_channel_profile_pic(channel_id)
+                        
+                        found_videos.append({
+                            'video_id': vid_id,
+                            'title': title,
+                            'link': f"https://www.youtube.com/watch?v={vid_id}",
+                            'published': video_date.isoformat() if video_date else now.isoformat(),
+                            'channel_title': entry.get('uploader') or info.get('uploader') or "Unknown",
+                            'channel_profile_pic': profile_pic,
+                            'subscriber_count': sub_count,
+                            'view_count': entry.get('view_count') or 0
+                        })
+                        seen_ids.add(vid_id)
+                        
+            except Exception as e:
+                print(f"  yt-dlp error for {url}: {e}")
+                
+    return found_videos
+
 def get_recent_videos(channel_id, hours=24, limit=None):
     """
-    Fetches videos uploaded in the last 'hours' from a YouTube channel using RSS feed.
-    Falls back to HTML scraping if RSS fails.
+    Fetches videos uploaded in the last 'hours' from a YouTube channel.
+    Order of preference:
+    1. RSS Feed (Fastest, but blocked by Github Actions)
+    2. yt-dlp (Robust, uses Android API)
+    3. HTML Scraping (Fallback)
     """
-    rss_url = f"https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}"
-    print(f"Fetching RSS: {rss_url}")
-    feed = feedparser.parse(rss_url)
-    
-    # Check if feed is broken/404
-    # feedparser often returns status 200 even for 404 pages (parsing 404 html as valid feed sometimes?)
-    # But usually 'bozo' is set or entries is 0.
-    # If using feedparser on 404 page, entries might be 0.
-    # We should detect if it's a valid feed. Valid feeds have 'title' and 'entries'.
-    
-    use_fallback = False
-    if hasattr(feed, 'status') and feed.status == 404:
-        use_fallback = True
-    elif len(feed.entries) == 0:
-        # Could be no videos OR broken feed.
-        # For known active channels, broken feed is likely.
-        # But we don't want to define 'active' here.
-        # Let's check if 'feed.title' exists. 404 page usually parses to something weird or title 'YouTube'.
-        if 'title' not in feed.feed or feed.feed.title == "YouTube": 
-             use_fallback = True
-    
-    if use_fallback:
-        videos = scrape_videos_fallback(channel_id, hours)
-        if limit: videos = videos[:limit]
-        return videos
-
-    videos = []
-    now = datetime.datetime.now(pytz.utc)
-    
-    # helper: fetch profile pic & stats once per channel
-    profile_pic, sub_count = get_channel_profile_pic(channel_id)
-    
-    for entry in feed.entries:
-        try:
-            published = parser.parse(entry.published)
-            # Ensure published is timezone-aware and set to UTC if not
-            if published.tzinfo is None:
-                published = published.replace(tzinfo=pytz.utc)
+    # 1. Try RSS
+    try:
+        current_videos = []
+        rss_url = f"https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}"
+        print(f"Fetching RSS: {rss_url}")
+        feed = feedparser.parse(rss_url)
+        
+        rss_ok = True
+        if hasattr(feed, 'status') and feed.status == 404:
+            rss_ok = False
+        elif len(feed.entries) == 0:
+             # Check if truly empty or broken
+             if 'title' not in feed.feed or feed.feed.title == "YouTube": 
+                 rss_ok = False
+                 
+        if rss_ok:
+            # ... (Existing RSS parsing logic) ...
+            # Reuse the loop from before, but abstracted?
+            # For minimal change, I'll copy the logic back or refactor slightly.
+            # Let's keep existing logic but wrapped.
             
-            # Check if video is within the last 'hours'
-            time_diff = (now - published).total_seconds()
-            if time_diff < hours * 3600:
-                # Check if it is a Short
-                if is_short(entry.yt_videoid):
-                    print(f"  Skipping Short: {entry.title}")
+            now = datetime.datetime.now(pytz.utc)
+            profile_pic, sub_count = get_channel_profile_pic(channel_id)
+            
+            for entry in feed.entries:
+                try:
+                    published = parser.parse(entry.published)
+                    if published.tzinfo is None:
+                        published = published.replace(tzinfo=pytz.utc)
+                    
+                    time_diff = (now - published).total_seconds()
+                    if time_diff < hours * 3600:
+                        if is_short(entry.yt_videoid):
+                            print(f"  Skipping Short: {entry.title}")
+                            continue
+
+                        view_count = ""
+                        if hasattr(entry, 'media_statistics') and 'views' in entry.media_statistics:
+                            view_count = entry.media_statistics['views']
+                        
+                        current_videos.append({
+                            'video_id': entry.yt_videoid,
+                            'title': entry.title,
+                            'link': entry.link,
+                            'published': published.isoformat(),
+                            'channel_title': entry.author,
+                            'channel_profile_pic': profile_pic,
+                            'subscriber_count': sub_count,
+                            'view_count': view_count
+                        })
+                except:
                     continue
+            
+            # If we found videos, return them. 
+            # If RSS was "ok" (200) but empty, it might be a valid channel with no recent videos.
+            # But on GH Actions, RSS often returns 403 Forbidden or similar which feedparser might mask or show as empty.
+            # So if empty, we MIGHT want to try fallback anyway just in case?
+            if current_videos:
+                if limit: current_videos = current_videos[:limit]
+                return current_videos
+            
+            print("  RSS returned 0 videos. Trying fallback to be sure...")
 
-                # Try to get view count from media_statistics
-                view_count = ""
-                if hasattr(entry, 'media_statistics') and 'views' in entry.media_statistics:
-                    view_count = entry.media_statistics['views']
-                
-                videos.append({
-                    'video_id': entry.yt_videoid,
-                    'title': entry.title,
-                    'link': entry.link,
-                    'published': published.isoformat(),
-                    'channel_title': entry.author,
-                    'channel_profile_pic': profile_pic,
-                    'subscriber_count': sub_count,
-                    'view_count': view_count
-                })
-            else:
-                # Optional: print only if it's borderline or for debug
-                # print(f"  Skipping video (too old): {entry.title} ({time_diff/3600:.1f} hours ago)")
-                pass
-        except Exception as e:
-            print(f"Error parsing entry: {e}")
-            continue
-            
-    # Apply limit if specified
-    if limit:
-        videos = videos[:limit]
-            
+    except Exception as e:
+        print(f"  RSS failed: {e}")
+
+    # 2. Try yt-dlp (Strong Fallback)
+    try:
+        dlp_videos = scrape_ytdlp(channel_id, hours, limit)
+        if dlp_videos:
+            print(f"  ✅ yt-dlp found {len(dlp_videos)} videos.")
+            if limit: dlp_videos = dlp_videos[:limit]
+            return dlp_videos
+    except Exception as e:
+        print(f"  yt-dlp fallback failed: {e}")
+
+    # 3. HTML Scraping (Last Resort)
+    videos = scrape_videos_fallback(channel_id, hours)
+    if limit: videos = videos[:limit]
     return videos
 
 if __name__ == "__main__":
-    # Test with a known channel ID (e.g., Google's channel)
-    # REPLACE WITH A REAL CHANNEL ID FOR TESTING
-    channel_id = "UC_x5XG1OV2P6uZZ5FSM9Ttw" 
-    videos = get_recent_videos(channel_id)
-    print(f"Found {len(videos)} videos in the last 24 hours:")
+    # Test with a known active channel ID (e.g., 고성국TV)
+    channel_id = "UCM8BcGB6BWKq3utIMhGKnUA" 
+    print(f"Testing get_recent_videos for {channel_id}...")
+    videos = get_recent_videos(channel_id, hours=48) # Use 48h to be sure to find something
+    print(f"Found {len(videos)} videos:")
     for v in videos:
-        print(f"- {v['title']} ({v['link']})")
+        print(f"- {v['title']} ({v['published']})")
