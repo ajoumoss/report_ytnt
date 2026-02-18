@@ -92,34 +92,58 @@ def is_short(video_id):
     except: return False
 
 def get_recent_videos_api(channel_id, api_key, hours=24, limit=10):
-    print(f"  [API] Fetching videos via YouTube Data API for {channel_id}...")
+    print(f"  [API] Fetching videos via YouTube Data API (PlaylistItems) for {channel_id}...")
     try:
+        playlist_id = 'UU' + channel_id[2:] if channel_id.startswith('UC') else channel_id
         youtube = googleapiclient.discovery.build("youtube", "v3", developerKey=api_key)
-        now = datetime.datetime.now(pytz.utc)
-        published_after = (now - datetime.timedelta(hours=hours)).strftime('%Y-%m-%dT%H:%M:%SZ')
-        print(f"  [API] Published after: {published_after}")
         
-        request = youtube.search().list(
-            part="snippet", channelId=channel_id, order="date", publishedAfter=published_after, maxResults=limit, type="video"
+        now = datetime.datetime.now(pytz.utc)
+        cutoff = now - datetime.timedelta(hours=hours)
+
+        # Use playlistItems.list instead of search.list (more reliable and lower quota)
+        request = youtube.playlistItems().list(
+            part="snippet,contentDetails",
+            playlistId=playlist_id,
+            maxResults=limit or 20
         )
         response = request.execute()
         
         found_videos = []
-        print(f"  [API] Raw response items count: {len(response.get('items', []))}")
+        # Try to get profile pic via API if possible, else fallback
         profile_pic, sub_count = get_channel_profile_pic(channel_id, api_key)
         
         for item in response.get('items', []):
-            vid_id = item['id']['videoId']
             snippet = item['snippet']
-            found_videos.append({
-                'video_id': vid_id, 'title': snippet['title'], 'link': f"https://www.youtube.com/watch?v={vid_id}",
-                'published': snippet['publishedAt'], 'channel_title': snippet['channelTitle'],
-                'channel_profile_pic': profile_pic, 'subscriber_count': sub_count, 'view_count': 0
-            })
-        print(f"  [API] Successfully found {len(found_videos)} videos.")
+            vid_id = snippet['resourceId']['videoId']
+            pub_at = snippet['publishedAt']
+            
+            # Filter by date
+            video_date = parser.parse(pub_at)
+            if video_date.tzinfo is None:
+                video_date = video_date.replace(tzinfo=pytz.utc)
+            
+            if video_date >= cutoff:
+                found_videos.append({
+                    'video_id': vid_id,
+                    'title': snippet['title'],
+                    'link': f"https://www.youtube.com/watch?v={vid_id}",
+                    'published': pub_at,
+                    'channel_title': snippet['channelTitle'],
+                    'channel_profile_pic': profile_pic,
+                    'subscriber_count': sub_count,
+                    'view_count': 0
+                })
+                
+        print(f"  [API] Successfully found {len(found_videos)} videos via PlaylistItems.")
         return found_videos
+        
     except Exception as e:
-        print(f"  [API] Error: {e}")
+        err_msg = str(e)
+        if "blocked" in err_msg.lower() or "forbidden" in err_msg.lower():
+             print(f"  [API] CRITICAL ERROR: API access is blocked/forbidden. 🛑")
+             print(f"  [TIP] Check if 'YouTube Data API v3' is allowed in your API Key 'API restrictions' settings in Google Cloud Console.")
+        else:
+             print(f"  [API] Error: {e}")
         return []
 
 def scrape_videos_fallback(channel_id, hours=24):

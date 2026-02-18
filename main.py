@@ -306,7 +306,12 @@ def main():
             
             # Check if it returns a dict (JSON) or string (error/legacy)
             if isinstance(result, dict):
-                if result.get("is_political", True): # Default to True if uncertain, to avoid skipping
+                if result.get("analysis_failed"):
+                    print(f"  [TECHNICAL FAILURE] Analysis failed for: {video['title']}. Adding to report with error status.")
+                    video['summary'] = result.get("summary", "Technical analysis failure.")
+                    video['political_leaning'] = "Analysis Failed"
+                    processed_videos.append(video)
+                elif result.get("is_political", True): # Default to True if uncertain, to avoid skipping
                     video['summary'] = result.get("summary", "No summary provided.")
                     
                     # Update Title to Korean if available
@@ -327,9 +332,6 @@ def main():
                     # Store Token Usage
                     if result.get("token_usage"):
                         video['token_usage'] = result.get("token_usage")
-                        
-                    # Ensure stats are preserved (passed through from scraper)
-                    # They are already in video dict
                         
                     processed_videos.append(video)
                     print(f"  [DEBUG] Success! Total processed videos: {len(processed_videos)}")

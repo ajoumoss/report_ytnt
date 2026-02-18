@@ -101,7 +101,7 @@ def summarize_transcript(transcript, title):
         return result
     except Exception as e:
         print(f"LLM Error for {title}: {e}")
-        return {"is_political": False, "summary": f"Error during summarization: {e}", "political_leaning": "Error"}
+        return {"is_political": False, "summary": f"Error during summarization: {e}", "political_leaning": "Error", "analysis_failed": True}
 
 def summarize_video(video_file, title):
     """
@@ -188,7 +188,7 @@ def summarize_video(video_file, title):
     
     except Exception as e:
         print(f"LLM Multimodal Error for {title}: {e}")
-        return {"is_political": False, "summary": f"Error during multimodal summarization: {e}", "political_leaning": "Error"}
+        return {"is_political": False, "summary": f"Error during multimodal summarization: {e}", "political_leaning": "Error", "analysis_failed": True}
 
 if __name__ == "__main__":
     # Test
