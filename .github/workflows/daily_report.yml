@@ -20,10 +20,8 @@ jobs:
         python-version: '3.10'
 
     - name: Set up cookies
-      env:
-        YOUTUBE_COOKIES: ${{ secrets.YOUTUBE_COOKIES }}
-      if: env.YOUTUBE_COOKIES != ''
-      run: echo "$YOUTUBE_COOKIES" > cookies.txt
+      if: secrets.YOUTUBE_COOKIES != ''
+      run: printf "%b" "${{ secrets.YOUTUBE_COOKIES }}" > cookies.txt
 
     - name: Install dependencies
       run: |

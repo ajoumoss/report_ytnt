@@ -255,6 +255,7 @@ def main():
                     print(f"  Video is long ({duration}s). Preferring text subtitles to save tokens.")
                     use_multimodal = False
                     
+                result = None
                 try: # Wrap multimodal attempt in try-except
                     if use_multimodal:
                         print(f"  Attempting Multimodal Video Analysis...")

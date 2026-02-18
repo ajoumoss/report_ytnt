@@ -59,6 +59,8 @@ def get_channel_profile_pic(channel_id, api_key=None):
     # 3. Fallback to yt-dlp (Last resort, prone to blocking)
     try:
         ydl_opts = {'quiet': True, 'skip_download': True, 'extract_flat': True, 'nocheckcertificate': True}
+        if os.path.exists('cookies.txt'):
+            ydl_opts['cookiefile'] = 'cookies.txt'
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(f"https://www.youtube.com/channel/{channel_id}", download=False)
             pic_url = info.get('thumbnails', [{}])[-1].get('url', "https://www.gstatic.com/youtube/img/branding/favicon/favicon_144x144.png")
@@ -213,6 +215,8 @@ def scrape_ytdlp(channel_id, api_key=None, hours=24, limit=10):
         'quiet': True, 'extract_flat': 'in_playlist', 'playlistend': 50, 'ignoreerrors': True,
         'nocheckcertificate': True, 'extractor_args': {'youtube': {'player_client': ['android', 'ios', 'web']}},
     }
+    if os.path.exists('cookies.txt'):
+        ydl_opts['cookiefile'] = 'cookies.txt'
     
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         try:

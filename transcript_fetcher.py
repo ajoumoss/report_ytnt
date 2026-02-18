@@ -6,13 +6,24 @@ def get_transcript(video_id):
     Fetches the transcript for a given YouTube video ID.
     Returns the transcript as a single string.
     """
+    import os
+    import requests
+    from http.cookiejar import MozillaCookieJar
+    
     try:
-        # Instantiate the API
-        yt_api = YouTubeTranscriptApi()
+        cookies_path = 'cookies.txt'
+        session = requests.Session()
         
-        # Use fetch method which handles list -> find -> fetch
-        # It defaults to English, so we need to specify languages if we want Korean
-        # The fetch method signature in this version: fetch(video_id, languages, preserve_formatting)
+        if os.path.exists(cookies_path):
+            print(f"  [DEBUG] Using {cookies_path} for transcript fetching.")
+            cj = MozillaCookieJar(cookies_path)
+            cj.load(ignore_discard=True, ignore_expires=True)
+            session.cookies.update(cj)
+        
+        # Instantiate the API with the session
+        yt_api = YouTubeTranscriptApi(http_client=session)
+        
+        # Use fetch method
         transcript_list_of_dicts = yt_api.fetch(video_id, languages=['ko', 'en'])
         
         formatter = TextFormatter()

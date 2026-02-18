@@ -12,6 +12,7 @@ temp_audio*
 *.mp4
 *.mp3
 *.m4a
+cookies.txt
 DS_Store
 report.md
 media__*.png

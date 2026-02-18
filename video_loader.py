@@ -25,13 +25,14 @@ def download_video(video_url, output_path="temp_video"):
             pass
 
     ydl_opts = {
-        'format': 'worst[ext=mp4]/worst', 
+        'format': 'bestvideo[height<=360]+bestaudio/best[height<=360]/best', # More robust format selection
         'outtmpl': f'{output_path}.%(ext)s',
         'quiet': True,
         'no_warnings': True,
         'nocheckcertificate': True,
         'ignoreerrors': True,
-        'extractor_args': {'youtube': {'player_client': ['android', 'ios']}}, # Cycle clients to avoid blocks
+        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'extractor_args': {'youtube': {'player_client': ['android', 'ios']}},
     }
 
     # Add cookies if cookies.txt exists
@@ -157,9 +158,6 @@ def process_audio(video_url):
             os.remove(file_path)
 
     # ... (previous code)
-    if result.get("token_usage"):
-        video['token_usage'] = result.get("token_usage")
-    return result
 
 def get_video_info(video_url):
     """
