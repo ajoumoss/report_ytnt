@@ -331,6 +331,7 @@ def main():
                     # They are already in video dict
                         
                     processed_videos.append(video)
+                    print(f"  [DEBUG] Success! Total processed videos: {len(processed_videos)}")
                 else:
                     print(f"  Skipping non-political video: {video['title']}")
             else:

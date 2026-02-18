@@ -119,6 +119,8 @@ def get_recent_videos_api(channel_id, api_key, hours=24, limit=10):
         now = datetime.datetime.now(pytz.utc)
         published_after = (now - datetime.timedelta(hours=hours)).isoformat()
         
+        print(f"  [API] Published after: {published_after}")
+        
         # Search for recent videos
         request = youtube.search().list(
             part="snippet",
@@ -131,6 +133,7 @@ def get_recent_videos_api(channel_id, api_key, hours=24, limit=10):
         response = request.execute()
         
         found_videos = []
+        print(f"  [API] Raw response items count: {len(response.get('items', []))}")
         profile_pic, sub_count = get_channel_profile_pic(channel_id)
         
         for item in response.get('items', []):
@@ -412,10 +415,14 @@ def get_recent_videos(channel_id, hours=24, limit=None, api_key=None):
 
     # 3. Try yt-dlp (Robust Fallback)
     try:
+        print(f"  Trying yt-dlp fallback for {channel_id}...")
         dlp_videos = scrape_ytdlp(channel_id, hours, limit)
         if dlp_videos:
+            print(f"  ✅ yt-dlp found {len(dlp_videos)} videos.")
             if limit: dlp_videos = dlp_videos[:limit]
             return dlp_videos
+        else:
+            print(f"  yt-dlp found 0 videos.")
     except Exception as e:
         print(f"  yt-dlp fallback failed: {e}")
 
