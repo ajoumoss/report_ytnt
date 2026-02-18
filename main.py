@@ -237,94 +237,42 @@ def main():
                 
             print(f"  Found video: {video['title']}")
             
-            # 0. RANDOM DELAY to mimic human behavior and avoid bot detection
-            import random
-            delay = random.uniform(5, 15)
             print(f"  [ANTI-BOT] Waiting {delay:.1f}s before processing...")
             time.sleep(delay)
+            
+            # Check Duration using video_loader (lightweight info check)
+            import video_loader
+            video_info = video_loader.get_video_info(video['link'])
+            duration = 0
+            if video_info:
+                duration = video_info.get('duration', 0)
+            
+            # Skip Shorts (approx < 60s)
+            if duration > 0 and duration < 60:
+                 print(f"  [SKIP] Video is a Short ({duration}s). Skipping.")
+                 continue
             
             print(f"  Fetching transcript...")
             transcript = get_transcript(video['video_id'])
             
-            # Check for Rate Limit signal from transcript fetcher
-            is_blocked = (transcript == "RATE_LIMITED")
+            result = None
             
-            if not transcript or is_blocked:
-                # 2. If Transcript Fails OR we are blocked, handle fallbacks
-                if is_blocked:
-                    print(f"  [CRITICAL] YouTube block detected during transcript fetching. Skipping other methods for this video.")
-                    result = {"is_political": True, "summary": "Technical Failure: YouTube's bot detection blocked the transcript request (Rate Limit).", "political_leaning": "Analysis Failed", "analysis_failed": True}
-                else:
-                    print("  No transcript found. Checking video details...")
-                    
-                    import video_loader
-                
-                # Check Duration First
-                video_info = video_loader.get_video_info(video['link'])
-                duration = 0
-                if video_info:
-                    duration = video_info.get('duration', 0)
-                    
-                # Decision Logic:
-                # If > 50 mins (approx 3000s) -> Text Subtitles (to avoid token limit/cost)
-                # Else -> Multimodal (better quality)
-                
-                use_multimodal = True
-                if duration > 3000:
-                    print(f"  Video is long ({duration}s). Preferring text subtitles to save tokens.")
-                    use_multimodal = False
-                    
-                result = None
-                try: # Wrap multimodal attempt in try-except
-                    if use_multimodal:
-                        print(f"  Attempting Multimodal Video Analysis...")
-                        gemini_file = video_loader.process_video(video['link'])
-                        if gemini_file:
-                            result = summarize_video(gemini_file, video['title'])
-                            
-                            # Check for Token Limit Error in Result
-                            if isinstance(result, dict) and result.get('summary', '').startswith("Error") and "token" in result.get('summary', '').lower():
-                                 print("  Multimodal failed due to token limit. Falling back to subtitles...")
-                                 use_multimodal = False # Trigger fallback
-                    
-                    # Fallback to Subtitles (if Long OR Multimodal Failed)
-                    if (not use_multimodal or not result or (isinstance(result, dict) and result.get('political_leaning') == "Error")) and not is_blocked:
-                        if not use_multimodal:
-                            print("  Fetching subtitles via yt-dlp...")
-                        else:
-                            print("  Multimodal failed. Falling back to subtitles...")
-                            
-                        forced_transcript = video_loader.download_subtitles_text(video['link'])
-                        if forced_transcript == "RATE_LIMITED":
-                            is_blocked = True
-                            print("  [CRITICAL] Rate limit detected during subtitle download.")
-                            result = {"is_political": True, "summary": "Technical Failure: YouTube's bot detection blocked the subtitle request (Rate Limit).", "political_leaning": "Analysis Failed", "analysis_failed": True}
-                        elif forced_transcript:
-                            print("  Subtitles downloaded successfully.")
-                            result = summarize_transcript(forced_transcript, video['title'])
-                        else:
-                            print("  Could not get subtitles. Attempting Audio-Only Analysis (Last Resort)...")
-                            # Audio-Only Fallback
-                            audio_file = video_loader.process_audio(video['link'])
-                            if audio_file == "RATE_LIMITED":
-                                is_blocked = True
-                                print("  [CRITICAL] Rate limit detected during audio download.")
-                                result = {"is_political": True, "summary": "Technical Failure: YouTube's bot detection blocked the audio request (Rate Limit).", "political_leaning": "Analysis Failed", "analysis_failed": True}
-                            elif audio_file:
-                                print("  Audio uploaded. Analyzing audio content...")
-                                result = summarize_video(audio_file, video['title'])
-                            else:
-                                print("  Audio processing failed.")
-                                result = {"is_political": True, "summary": "Technical Failure: All methods (Transcript, Video, Subtitles, Audio) failed. This is likely due to YouTube's bot detection blocking the cloud environment.", "political_leaning": "Analysis Failed", "analysis_failed": True}
-
-                except Exception as e:
-                    print(f"  Critical error during analysis of {video['title']}: {e}")
-                    result = {"is_political": True, "summary": f"Critical error during analysis: {e}", "political_leaning": "Analysis Failed", "analysis_failed": True}
-
+            if transcript:
+                 print(f"  Transcript fetched successfully. Analyzing...")
+                 result = summarize_transcript(transcript, video['title'])
             else:
-                # 4. If Transcript Exists, Analyze it
-                result = summarize_transcript(transcript, video['title'])
+                 print(f"  [FAILURE] Transcript unavailable. Marking as '자막추출불가'.")
+                 result = {
+                    "is_political": True, 
+                    "summary": "자막추출불가", 
+                    "political_leaning": "N/A", 
+                    "analysis_failed": True
+                 }
 
+            if result:
+                 # Check again for failure signal inside result
+                 pass
+            
             # 5. Final Check: Ensure result exists
             if not result:
                 result = {"is_political": True, "summary": "Technical Failure: No analysis result could be generated.", "political_leaning": "Analysis Failed", "analysis_failed": True}
