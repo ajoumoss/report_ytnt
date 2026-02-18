@@ -91,11 +91,10 @@ def download_audio(video_url, output_path="temp_audio"):
         'extractor_args': {'youtube': {'player_client': ['web', 'android', 'ios']}},
     }
 
-    # Prioritize OAuth2 Cache
-    if os.path.exists('yt_auth_cache'):
-        ydl_opts['cache_dir'] = 'yt_auth_cache'
-    elif os.path.exists('cookies.txt'):
+    # Use cookies if available
+    if os.path.exists('cookies.txt'):
         ydl_opts['cookiefile'] = 'cookies.txt'
+    # Add po_token if available
     elif os.getenv("YOUTUBE_PO_TOKEN"):
         po_token = os.getenv("YOUTUBE_PO_TOKEN")
         ydl_opts['extractor_args']['youtube']['po_token'] = [f"web+{po_token}"]
@@ -229,12 +228,11 @@ def download_subtitles_text(video_url):
         'user_agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
         'extractor_args': {'youtube': {'player_client': ['web', 'android', 'ios']}},
     }
-    
-    # Prioritize OAuth2 Cache
-    if os.path.exists('yt_auth_cache'):
-        ydl_opts['cache_dir'] = 'yt_auth_cache'
-    elif os.path.exists('cookies.txt'):
+
+    # Use cookies if available
+    if os.path.exists('cookies.txt'):
         ydl_opts['cookiefile'] = 'cookies.txt'
+    # Add po_token if available
     elif os.getenv("YOUTUBE_PO_TOKEN"):
         po_token = os.getenv("YOUTUBE_PO_TOKEN")
         ydl_opts['extractor_args']['youtube']['po_token'] = [f"web+{po_token}"]
