@@ -38,7 +38,9 @@ def download_video(video_url, output_path="temp_video"):
     # Add cookies if cookies.txt exists
     if os.path.exists('cookies.txt'):
         ydl_opts['cookiefile'] = 'cookies.txt'
-        print("  [DEBUG] Using cookies.txt for authentication.")
+        print(f"  [DEBUG] Using cookies.txt for authentication. Size: {os.path.getsize('cookies.txt')} bytes")
+    else:
+        print("  [DEBUG] cookies.txt NOT found for yt-dlp.")
 
     print(f"  Downloading video for multimodal analysis: {video_url}...")
     try:

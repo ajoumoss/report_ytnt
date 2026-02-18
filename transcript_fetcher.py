@@ -18,10 +18,20 @@ def get_transcript(video_id):
         })
         
         if os.path.exists(cookies_path):
-            print(f"  [DEBUG] Using {cookies_path} for transcript fetching.")
-            cj = MozillaCookieJar(cookies_path)
-            cj.load(ignore_discard=True, ignore_expires=True)
-            session.cookies.update(cj)
+            print(f"  [DEBUG] cookies.txt found. Path: {os.path.abspath(cookies_path)}, Size: {os.path.getsize(cookies_path)} bytes")
+            try:
+                cj = MozillaCookieJar(cookies_path)
+                cj.load(ignore_discard=True, ignore_expires=True)
+                session.cookies.update(cj)
+                print(f"  [DEBUG] Successfully loaded {len(session.cookies)} cookies from {cookies_path}")
+            except Exception as cookie_err:
+                print(f"  [DEBUG] Error loading cookies.txt: {cookie_err}")
+                # Fallback to plain file check if MozillaCookieJar fails
+                with open(cookies_path, 'r') as f:
+                    content_preview = f.read(100).replace('\n', '\\n')
+                    print(f"  [DEBUG] cookies.txt content preview: {content_preview}")
+        else:
+            print(f"  [DEBUG] cookies.txt NOT found at {os.path.abspath(cookies_path)}")
         
         # Instantiate the API with the session
         yt_api = YouTubeTranscriptApi(http_client=session)

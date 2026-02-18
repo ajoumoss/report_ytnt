@@ -20,10 +20,12 @@ jobs:
         python-version: '3.10'
 
     - name: Set up cookies
+      env:
+        YOUTUBE_COOKIES: ${{ secrets.YOUTUBE_COOKIES }}
       run: |
-        if [ -n "${{ secrets.YOUTUBE_COOKIES }}" ]; then
-          printf "%b" "${{ secrets.YOUTUBE_COOKIES }}" > cookies.txt
-          echo "Cookies set up successfully."
+        if [ -n "$YOUTUBE_COOKIES" ]; then
+          python3 -c "import os; open('cookies.txt', 'w', encoding='utf-8').write(os.environ['YOUTUBE_COOKIES'])"
+          echo "Cookies set up successfully. Size: $(wc -c < cookies.txt) bytes"
         else
           echo "YOUTUBE_COOKIES secret is empty. Skipping cookies setup."
         fi
