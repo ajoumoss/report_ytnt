@@ -196,16 +196,15 @@ def scrape_ytdlp(channel_id, hours=24, limit=10):
     Scrapes videos using yt-dlp (Robust against bot detection).
     Uses the 'UU' playlist hack (All Uploads) which is much more stable.
     """
-    print(f"  Attempting yt-dlp UU-playlist scrape for {channel_id}...")
+    print(f"  [DEBUG] yt-dlp UU-playlist scrape start for {channel_id}")
     
-    # UU Playlist Hack: Replace 'UC' with 'UU' in channel ID
-    # Valid for all channels. UU = All Uploads playlist.
     if channel_id.startswith('UC'):
         playlist_id = 'UU' + channel_id[2:]
     else:
-        playlist_id = channel_id # Fallback
+        playlist_id = channel_id 
         
     url = f"https://www.youtube.com/playlist?list={playlist_id}"
+    print(f"  [DEBUG] Targeted Playlist URL: {url}")
     
     found_videos = []
     now = datetime.datetime.now(pytz.utc)
@@ -214,20 +213,27 @@ def scrape_ytdlp(channel_id, hours=24, limit=10):
     ydl_opts = {
         'quiet': True,
         'extract_flat': 'in_playlist',
-        'playlistend': limit * 2 if limit else 30, # Check enough to find recent ones
+        'playlistend': 50, # Scaled up to be safe
         'ignoreerrors': True,
-        'no_warnings': True,
-        'extractor_args': {'youtube': {'player_client': ['android', 'ios']}},
+        'no_warnings': False, # Show warnings for debug
+        'nocheckcertificate': True,
+        'extractor_args': {'youtube': {'player_client': ['android', 'ios', 'web']}},
     }
     
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         try:
             info = ydl.extract_info(url, download=False)
-            if not info or 'entries' not in info:
-                print(f"    No entries found for playlist {playlist_id}")
+            if not info:
+                print(f"    [DEBUG] ydl.extract_info returned None for {playlist_id}")
                 return []
                 
-            for entry in info['entries']:
+            entries = info.get('entries', [])
+            print(f"    [DEBUG] Found {len(list(entries))} raw entries in playlist.")
+            
+            # Re-fetch entries as list to avoid generator issues
+            entries = list(info.get('entries', []))
+
+            for entry in entries:
                 if not entry: continue
                 
                 vid_id = entry.get('id')
@@ -252,15 +258,14 @@ def scrape_ytdlp(channel_id, hours=24, limit=10):
                         if video_date >= cutoff:
                             is_recent = True
                     else:
-                        # Date only - grant 2 days buffer for safety (timezone/rounding)
                         if video_date.date() >= cutoff.date() - datetime.timedelta(days=1):
                             is_recent = True
                 else:
-                    # If date is missing (common with flat extract), 
-                    # check first few items since entries are sorted by new.
-                    if len(found_videos) < 3:
+                    # GH Actions specific fallback logic:
+                    # If date is missing (common with flat extract), check top items.
+                    if len(found_videos) < 5:
                         is_recent = True
-                        video_date = now # Placeholder
+                        video_date = now 
 
                 if is_recent:
                     profile_pic, sub_count = get_channel_profile_pic(channel_id)
@@ -269,7 +274,7 @@ def scrape_ytdlp(channel_id, hours=24, limit=10):
                         'title': title,
                         'link': f"https://www.youtube.com/watch?v={vid_id}",
                         'published': video_date.isoformat() if video_date else now.isoformat(),
-                        'channel_title': info.get('uploader') or "Unknown",
+                        'channel_title': info.get('uploader') or entry.get('uploader') or "Unknown",
                         'channel_profile_pic': profile_pic,
                         'subscriber_count': sub_count,
                         'view_count': entry.get('view_count') or 0
@@ -278,8 +283,9 @@ def scrape_ytdlp(channel_id, hours=24, limit=10):
                     if limit and len(found_videos) >= limit:
                         break
                         
+            print(f"    [DEBUG] Successfully filtered {len(found_videos)} recent videos.")
         except Exception as e:
-            print(f"    yt-dlp UU-playlist error: {e}")
+            print(f"    [DEBUG] yt-dlp UU-playlist error: {e}")
                 
     return found_videos
 
@@ -373,10 +379,10 @@ def get_recent_videos(channel_id, hours=24, limit=None):
     return videos
 
 if __name__ == "__main__":
-    # Test with a known active channel ID (e.g., 고성국TV)
+    # Test with a known active channel ID
     channel_id = "UCM8BcGB6BWKq3utIMhGKnUA" 
     print(f"Testing get_recent_videos for {channel_id}...")
-    videos = get_recent_videos(channel_id, hours=48) # Use 48h to be sure to find something
+    videos = get_recent_videos(channel_id, hours=48)
     print(f"Found {len(videos)} videos:")
     for v in videos:
         print(f"- {v['title']} ({v['published']})")
