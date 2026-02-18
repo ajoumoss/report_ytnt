@@ -14,6 +14,8 @@ import video_loader
 from llm_summarizer import summarize_transcript, summarize_video
 import json
 import markdown
+import time
+import random
 
 load_dotenv()
 
