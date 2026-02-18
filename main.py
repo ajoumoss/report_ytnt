@@ -223,6 +223,7 @@ def main():
             api_key=os.getenv('GOOGLE_API_KEY')
         )
         total_found += len(videos)
+        print(f"  --> Scraper returned {len(videos)} videos for this channel.")
         
         for video in videos:
             # Fix Unknown channel name if it occurs (e.g. fallback scraping)

@@ -2,158 +2,122 @@ import feedparser
 import datetime
 from dateutil import parser
 import pytz
-
 import requests
 import re
+import os
+import json
+import googleapiclient.discovery
+import yt_dlp
 
-def get_channel_profile_pic(channel_id):
+def get_channel_profile_pic(channel_id, api_key=None):
     """
-    Fetches the profile picture URL and Subscriber Count for a YouTube channel.
-    Values are cached in a simple dict to avoid redundant requests.
-    Returns: (pic_url, subscriber_count)
+    Fetches the profile picture and subscriber count for a channel.
+    Prioritizes official API, falls back to requests/regex, then yt-dlp.
     """
     if not hasattr(get_channel_profile_pic, "cache"):
         get_channel_profile_pic.cache = {}
-    
+        
     if channel_id in get_channel_profile_pic.cache:
         return get_channel_profile_pic.cache[channel_id]
 
-    url = f"https://www.youtube.com/channel/{channel_id}"
-    try:
-        response = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'})
-        if response.status_code == 200:
-            pic_url = "https://www.gstatic.com/youtube/img/branding/favicon/favicon_144x144.png"
-            sub_count = "구독자 비공개"
-
-            # 1. Profile Pic
-            match = re.search(r'<meta property="og:image" content="(https://yt3.googleusercontent.com/[^"]+)"', response.text)
-            if match:
-                pic_url = match.group(1)
+    # 1. Try API if available
+    if api_key:
+        try:
+            youtube = googleapiclient.discovery.build("youtube", "v3", developerKey=api_key)
+            request = youtube.channels().list(
+                part="snippet,statistics",
+                id=channel_id
+            )
+            response = request.execute()
             
-            # 2. Subscriber Count
-            # Try generic regex for simpleText first
-            # Pattern: "subscriberCountText":{"simpleText":"1.23M subscribers"}
-            # Pattern: "subscriberCountText":{"simpleText":"구독자 1.23만명"}
-            match_sub = re.search(r'"subscriberCountText":\{"simpleText":"(.*?)"\}', response.text)
-            if match_sub:
-                raw_count = match_sub.group(1)
-                # Clean up common suffixes/prefixes
-                sub_count = raw_count.replace(" subscribers", "").replace(" subscriber", "")
-                sub_count = sub_count.replace("구독자 ", "").replace("명", "")
-                sub_count = sub_count.strip()
-            else:
-                # If simpleText fails, sometimes it's under accessibilityData? 
-                # Or maybe inconsistent JSON structure.
-                # Fallback to no change if not found
-                pass
+            if response.get('items'):
+                item = response['items'][0]
+                pic_url = item['snippet']['thumbnails']['default']['url']
+                sub_count = item['statistics'].get('subscriberCount', 'N/A')
+                
+                get_channel_profile_pic.cache[channel_id] = (pic_url, sub_count)
+                return pic_url, sub_count
+        except Exception as e:
+            print(f"  [API] Info Fetch Error: {e}")
 
+    # 2. Try Simple Request (Fastest fallback)
+    try:
+        url = f"https://www.youtube.com/channel/{channel_id}"
+        resp = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=10)
+        if resp.status_code == 200:
+            pic_match = re.search(r'<meta property="og:image" content="(https://yt3.googleusercontent.com/[^"]+)"', resp.text)
+            sub_match = re.search(r'"subscriberCountText":\{"simpleText":"(.*?)"\}', resp.text)
+            
+            pic_url = pic_match.group(1) if pic_match else "https://www.gstatic.com/youtube/img/branding/favicon/favicon_144x144.png"
+            sub_count = sub_match.group(1) if sub_match else "N/A"
+            
             get_channel_profile_pic.cache[channel_id] = (pic_url, sub_count)
             return pic_url, sub_count
-            
-    except Exception as e:
-        print(f"Error fetching profile/subs for {channel_id}: {e}")
-    
-    return "https://www.gstatic.com/youtube/img/branding/favicon/favicon_144x144.png", ""
-
-import json
-
-def parse_relative_time(text):
-    """
-    Parses '2 hours ago', '1 day ago', etc. into a datetime object.
-    """
-    now = datetime.datetime.now(pytz.utc)
-    text = text.lower().strip()
-    
-    try:
-        if "second" in text:
-            val = int(text.split()[0])
-            return now - datetime.timedelta(seconds=val)
-        if "minute" in text:
-            val = int(text.split()[0])
-            return now - datetime.timedelta(minutes=val)
-        if "hour" in text:
-            val = int(text.split()[0])
-            return now - datetime.timedelta(hours=val)
-        if "day" in text:
-            val = int(text.split()[0])
-            return now - datetime.timedelta(days=val)
-        if "week" in text:
-            val = int(text.split()[0])
-            return now - datetime.timedelta(weeks=val)
-        # Month/Year are too vague, usually means > 24h anyway
-        if "month" in text:
-            return now - datetime.timedelta(days=30)
-        if "year" in text:
-            return now - datetime.timedelta(days=365)
     except:
         pass
-    return now # Fallback
+
+    # 3. Fallback to yt-dlp (Last resort, prone to blocking)
+    try:
+        ydl_opts = {'quiet': True, 'skip_download': True, 'extract_flat': True, 'nocheckcertificate': True}
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(f"https://www.youtube.com/channel/{channel_id}", download=False)
+            pic_url = info.get('thumbnails', [{}])[-1].get('url', "https://www.gstatic.com/youtube/img/branding/favicon/favicon_144x144.png")
+            sub_count = str(info.get('subscriber_count', "N/A"))
+            get_channel_profile_pic.cache[channel_id] = (pic_url, sub_count)
+            return pic_url, sub_count
+    except:
+        pass
+    
+    return "https://www.gstatic.com/youtube/img/branding/favicon/favicon_144x144.png", "N/A"
+
+def parse_relative_time(text):
+    now = datetime.datetime.now(pytz.utc)
+    text = text.lower().strip()
+    try:
+        if "second" in text: return now - datetime.timedelta(seconds=int(text.split()[0]))
+        if "minute" in text: return now - datetime.timedelta(minutes=int(text.split()[0]))
+        if "hour" in text: return now - datetime.timedelta(hours=int(text.split()[0]))
+        if "day" in text: return now - datetime.timedelta(days=int(text.split()[0]))
+        if "week" in text: return now - datetime.timedelta(weeks=int(text.split()[0]))
+        if "month" in text: return now - datetime.timedelta(days=30)
+        if "year" in text: return now - datetime.timedelta(days=365)
+    except: pass
+    return now
 
 def is_short(video_id):
-    """
-    Checks if a video is a YouTube Short by sniffing the URL redirect.
-    Shorts URL: https://www.youtube.com/shorts/{video_id} -> 200 OK
-    Regular Video URL: https://www.youtube.com/shorts/{video_id} -> 303 Redirect to /watch
-    """
     url = f"https://www.youtube.com/shorts/{video_id}"
     try:
-        # Use HEAD request to allow_redirects=False
-        # If 200, it's a Short. If 303/302, it's a Video.
-        response = requests.head(url, allow_redirects=False, headers={'User-Agent': 'Mozilla/5.0'})
-        return response.status_code == 200
-    except:
-        return False
-
-import googleapiclient.discovery
+        resp = requests.head(url, allow_redirects=False, timeout=5)
+        return resp.status_code == 200
+    except: return False
 
 def get_recent_videos_api(channel_id, api_key, hours=24, limit=10):
-    """
-    Fetches videos using the official YouTube Data API v3.
-    This is the most reliable method in cloud environments like GitHub Actions.
-    """
     print(f"  [API] Fetching videos via YouTube Data API for {channel_id}...")
     try:
         youtube = googleapiclient.discovery.build("youtube", "v3", developerKey=api_key)
-        
-        # Calculate time cutoff (Strict RFC 3339 format with Z suffix)
         now = datetime.datetime.now(pytz.utc)
         published_after = (now - datetime.timedelta(hours=hours)).strftime('%Y-%m-%dT%H:%M:%SZ')
-        
         print(f"  [API] Published after: {published_after}")
         
-        # Search for recent videos
         request = youtube.search().list(
-            part="snippet",
-            channelId=channel_id,
-            order="date",
-            publishedAfter=published_after,
-            maxResults=limit,
-            type="video"
+            part="snippet", channelId=channel_id, order="date", publishedAfter=published_after, maxResults=limit, type="video"
         )
         response = request.execute()
         
         found_videos = []
         print(f"  [API] Raw response items count: {len(response.get('items', []))}")
-        profile_pic, sub_count = get_channel_profile_pic(channel_id)
+        profile_pic, sub_count = get_channel_profile_pic(channel_id, api_key)
         
         for item in response.get('items', []):
             vid_id = item['id']['videoId']
             snippet = item['snippet']
-            
             found_videos.append({
-                'video_id': vid_id,
-                'title': snippet['title'],
-                'link': f"https://www.youtube.com/watch?v={vid_id}",
-                'published': snippet['publishedAt'],
-                'channel_title': snippet['channelTitle'],
-                'channel_profile_pic': profile_pic,
-                'subscriber_count': sub_count,
-                'view_count': 0 # Search response doesn't include views directly
+                'video_id': vid_id, 'title': snippet['title'], 'link': f"https://www.youtube.com/watch?v={vid_id}",
+                'published': snippet['publishedAt'], 'channel_title': snippet['channelTitle'],
+                'channel_profile_pic': profile_pic, 'subscriber_count': sub_count, 'view_count': 0
             })
-            
         print(f"  [API] Successfully found {len(found_videos)} videos.")
         return found_videos
-        
     except Exception as e:
         print(f"  [API] Error: {e}")
         return []
@@ -161,281 +125,150 @@ def get_recent_videos_api(channel_id, api_key, hours=24, limit=10):
 def scrape_videos_fallback(channel_id, hours=24):
     print(f"⚠️  RSS failed for {channel_id}, trying HTML scraping...")
     url = f"https://www.youtube.com/channel/{channel_id}/videos"
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept-Language': 'en-US,en;q=0.9',
-    }
-    
     try:
-        response = requests.get(url, headers=headers)
-        if response.status_code != 200:
-            return []
-
-        # Extract ytInitialData
-        match = re.search(r'var ytInitialData = ({.*?});', response.text)
-        if not match:
-            return []
-            
-        data = json.loads(match.group(1))
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
+        response = requests.get(url, headers=headers, timeout=15)
+        if response.status_code != 200: return []
         
-        # Traverse JSON to find videos
+        # Extract JSON data from page
+        html = response.text
+        json_data_match = re.search(r'var ytInitialData = (\{.*?\});', html)
+        if not json_data_match: return []
+        
+        data = json.loads(json_data_match.group(1))
         videos = []
         now = datetime.datetime.now(pytz.utc)
         
-        # Helper: Get profile pic & Stats
+        # Traverse deep JSON structure
+        try:
+            tabs = data['contents']['twoColumnBrowseResultsRenderer']['tabs']
+            video_tab = next(tab for tab in tabs if 'videos' in tab.get('tabRenderer', {}).get('endpoint', {}).get('commandMetadata', {}).get('webCommandMetadata', {}).get('url', ''))
+            contents = video_tab['tabRenderer']['content']['richGridRenderer']['contents']
+        except: return []
+
         profile_pic, sub_count = get_channel_profile_pic(channel_id)
 
-        def find_video_renderers(obj):
-            if isinstance(obj, dict):
-                if 'videoRenderer' in obj:
-                    yield obj['videoRenderer']
-                for k, v in obj.items():
-                    yield from find_video_renderers(v)
-            elif isinstance(obj, list):
-                for item in obj:
-                    yield from find_video_renderers(item)
-
-        # Get first few videos (usually sorted by new)
-        count = 0
-        for vid in find_video_renderers(data):
-            if count > 10: break # Scan top 10
-            
+        for content in contents:
             try:
-                videoId = vid['videoId']
-                title = vid['title']['runs'][0]['text']
+                video_data = content['richItemRenderer']['content']['videoRenderer']
+                published_text = video_data.get('publishedTimeText', {}).get('simpleText', '')
+                if not published_text: continue
                 
-                # Published time
-                published_text = ""
-                if 'publishedTimeText' in vid:
-                    published_text = vid['publishedTimeText']['simpleText']
+                published_date = parse_relative_time(published_text)
+                time_diff = (now - published_date).total_seconds()
                 
-                published = parse_relative_time(published_text)
-                
-                # View Count
-                view_count = ""
-                if 'viewCountText' in vid and 'simpleText' in vid['viewCountText']:
-                     view_count = vid['viewCountText']['simpleText']
-                     # Format: "1.2K views" -> "1.2K" (remove 'views')
-                     view_count = view_count.replace(" views", "").replace(" view", "").replace("조회수 ", "").replace("회", "")
-                
-                # Check hours
-                time_diff = (now - published).total_seconds()
                 if time_diff < hours * 3600:
+                    vid_id = video_data['videoId']
+                    if is_short(vid_id): continue
+
                     videos.append({
-                        'video_id': videoId,
-                        'title': title,
-                        'link': f"https://www.youtube.com/watch?v={videoId}",
-                        'published': published.isoformat(),
-                        'channel_title': "Unknown", 
-                        'channel_profile_pic': profile_pic,
-                        'subscriber_count': sub_count,
-                        'view_count': view_count
+                        'video_id': vid_id, 'title': video_data['title']['runs'][0]['text'],
+                        'link': f"https://www.youtube.com/watch?v={vid_id}",
+                        'published': published_date.isoformat(),
+                        'channel_title': video_data['ownerText']['runs'][0]['text'],
+                        'channel_profile_pic': profile_pic, 'subscriber_count': sub_count,
+                        'view_count': video_data.get('viewCountText', {}).get('simpleText', '0')
                     })
-                else:
-                    print(f"    Skipping video (too old): {title} ({time_diff/3600:.1f} hours ago)")
-                count += 1
-            except Exception as e:
-                continue
-
+            except: continue
+            
         return videos
-
     except Exception as e:
-        print(f"Error scraping HTML: {e}")
+        print(f"Fallback Error: {e}")
         return []
 
-import yt_dlp
-
-def scrape_ytdlp(channel_id, hours=24, limit=10):
-    """
-    Scrapes videos using yt-dlp (Robust against bot detection).
-    Uses the 'UU' playlist hack (All Uploads) which is much more stable.
-    """
+def scrape_ytdlp(channel_id, api_key=None, hours=24, limit=10):
     print(f"  [DEBUG] yt-dlp UU-playlist scrape start for {channel_id}")
-    
-    if channel_id.startswith('UC'):
-        playlist_id = 'UU' + channel_id[2:]
-    else:
-        playlist_id = channel_id 
-        
+    playlist_id = 'UU' + channel_id[2:] if channel_id.startswith('UC') else channel_id
     url = f"https://www.youtube.com/playlist?list={playlist_id}"
-    print(f"  [DEBUG] Targeted Playlist URL: {url}")
     
     found_videos = []
     now = datetime.datetime.now(pytz.utc)
     cutoff = now - datetime.timedelta(hours=hours)
     
     ydl_opts = {
-        'quiet': True,
-        'extract_flat': 'in_playlist',
-        'playlistend': 50, # Scaled up to be safe
-        'ignoreerrors': True,
-        'no_warnings': False, # Show warnings for debug
-        'nocheckcertificate': True,
-        'extractor_args': {'youtube': {'player_client': ['android', 'ios', 'web']}},
+        'quiet': True, 'extract_flat': 'in_playlist', 'playlistend': 50, 'ignoreerrors': True,
+        'nocheckcertificate': True, 'extractor_args': {'youtube': {'player_client': ['android', 'ios', 'web']}},
     }
     
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         try:
             info = ydl.extract_info(url, download=False)
-            if not info:
-                print(f"    [DEBUG] ydl.extract_info returned None for {playlist_id}")
-                return []
-                
-            entries = info.get('entries', [])
-            print(f"    [DEBUG] Found {len(list(entries))} raw entries in playlist.")
-            
-            # Re-fetch entries as list to avoid generator issues
+            if not info: return []
             entries = list(info.get('entries', []))
-
+            print(f"    [DEBUG] Found {len(entries)} raw entries in playlist.")
+            
             for entry in entries:
                 if not entry: continue
-                
                 vid_id = entry.get('id')
-                title = entry.get('title')
-                
-                # Date Handling
                 upload_date_str = entry.get('upload_date')
                 timestamp = entry.get('timestamp')
                 
-                video_date = None
-                if timestamp:
-                    video_date = datetime.datetime.fromtimestamp(timestamp, pytz.utc)
-                elif upload_date_str:
-                     try:
-                         video_date = datetime.datetime.strptime(upload_date_str, "%Y%m%d").replace(tzinfo=pytz.utc)
-                     except:
-                         pass
+                video_date = datetime.datetime.fromtimestamp(timestamp, pytz.utc) if timestamp else \
+                             datetime.datetime.strptime(upload_date_str, "%Y%m%d").replace(tzinfo=pytz.utc) if upload_date_str else None
                 
                 is_recent = False
                 if video_date:
-                    if timestamp:
-                        if video_date >= cutoff:
-                            is_recent = True
-                    else:
-                        if video_date.date() >= cutoff.date() - datetime.timedelta(days=1):
-                            is_recent = True
-                else:
-                    # GH Actions specific fallback logic:
-                    # If date is missing (common with flat extract), check top items.
-                    if len(found_videos) < 5:
-                        is_recent = True
-                        video_date = now 
+                    if timestamp: is_recent = video_date >= cutoff
+                    else: is_recent = video_date.date() >= cutoff.date() - datetime.timedelta(days=1)
+                else: 
+                    if len(found_videos) < 5: is_recent = True; video_date = now
 
                 if is_recent:
-                    profile_pic, sub_count = get_channel_profile_pic(channel_id)
+                    profile_pic, sub_count = get_channel_profile_pic(channel_id, api_key)
                     found_videos.append({
-                        'video_id': vid_id,
-                        'title': title,
-                        'link': f"https://www.youtube.com/watch?v={vid_id}",
+                        'video_id': vid_id, 'title': entry.get('title'), 'link': f"https://www.youtube.com/watch?v={vid_id}",
                         'published': video_date.isoformat() if video_date else now.isoformat(),
                         'channel_title': info.get('uploader') or entry.get('uploader') or "Unknown",
-                        'channel_profile_pic': profile_pic,
-                        'subscriber_count': sub_count,
+                        'channel_profile_pic': profile_pic, 'subscriber_count': sub_count,
                         'view_count': entry.get('view_count') or 0
                     })
-                    
-                    if limit and len(found_videos) >= limit:
-                        break
-                        
+                    if limit and len(found_videos) >= limit: break
             print(f"    [DEBUG] Successfully filtered {len(found_videos)} recent videos.")
-        except Exception as e:
-            print(f"    [DEBUG] yt-dlp UU-playlist error: {e}")
-                
+        except Exception as e: print(f"    [DEBUG] yt-dlp UU-playlist error: {e}")
+            
     return found_videos
 
 def get_recent_videos(channel_id, hours=24, limit=None, api_key=None):
-    """
-    Fetches videos uploaded in the last 'hours' from a YouTube channel.
-    Order of preference:
-    1. YouTube Data API (Official, extremely stable)
-    2. RSS Feed (Fastest, prone to blocking)
-    3. yt-dlp UU-Playlist (Robust fallback)
-    4. HTML Scraping (Last resort)
-    """
-    # 1. Try Official API if key is provided
     if api_key:
         api_videos = get_recent_videos_api(channel_id, api_key, hours, limit or 10)
-        if api_videos:
-            return api_videos
+        if api_videos: return api_videos
 
-    # 2. Try RSS
     try:
         current_videos = []
         rss_url = f"https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}"
         print(f"Fetching RSS: {rss_url}")
         feed = feedparser.parse(rss_url)
-        
-        rss_ok = True
-        if hasattr(feed, 'status') and feed.status == 404:
-            rss_ok = False
-        elif len(feed.entries) == 0:
-             if 'title' not in feed.feed or feed.feed.title == "YouTube": 
-                 rss_ok = False
-                 
-        if rss_ok:
+        if not (hasattr(feed, 'status') and feed.status == 404) and len(feed.entries) > 0:
             now = datetime.datetime.now(pytz.utc)
-            profile_pic, sub_count = get_channel_profile_pic(channel_id)
-            
+            profile_pic, sub_count = get_channel_profile_pic(channel_id, api_key)
             for entry in feed.entries:
                 try:
-                    published = parser.parse(entry.published)
-                    if published.tzinfo is None:
-                        published = published.replace(tzinfo=pytz.utc)
-                    
-                    time_diff = (now - published).total_seconds()
-                    if time_diff < hours * 3600:
-                        if is_short(entry.yt_videoid):
-                            continue
-
-                        view_count = ""
-                        if hasattr(entry, 'media_statistics') and 'views' in entry.media_statistics:
-                            view_count = entry.media_statistics['views']
-                        
+                    published = parser.parse(entry.published).replace(tzinfo=pytz.utc) if parser.parse(entry.published).tzinfo is None else parser.parse(entry.published)
+                    if (now - published).total_seconds() < hours * 3600:
+                        if is_short(entry.yt_videoid): continue
                         current_videos.append({
-                            'video_id': entry.yt_videoid,
-                            'title': entry.title,
-                            'link': entry.link,
-                            'published': published.isoformat(),
-                            'channel_title': entry.author,
-                            'channel_profile_pic': profile_pic,
-                            'subscriber_count': sub_count,
-                            'view_count': view_count
+                            'video_id': entry.yt_videoid, 'title': entry.title, 'link': entry.link,
+                            'published': published.isoformat(), 'channel_title': entry.author,
+                            'channel_profile_pic': profile_pic, 'subscriber_count': sub_count,
+                            'view_count': entry.media_statistics['views'] if hasattr(entry, 'media_statistics') else ""
                         })
-                except:
-                    continue
-            
+                except: continue
             if current_videos:
                 if limit: current_videos = current_videos[:limit]
                 return current_videos
-            
-            print("  RSS returned 0 videos. Trying fallback...")
+        print("  RSS returned 0 videos. Trying fallback...")
+    except Exception as e: print(f"  RSS failed: {e}")
 
-    except Exception as e:
-        print(f"  RSS failed: {e}")
-
-    # 3. Try yt-dlp (Robust Fallback)
     try:
         print(f"  Trying yt-dlp fallback for {channel_id}...")
-        dlp_videos = scrape_ytdlp(channel_id, hours, limit)
+        dlp_videos = scrape_ytdlp(channel_id, api_key, hours, limit)
         if dlp_videos:
             print(f"  ✅ yt-dlp found {len(dlp_videos)} videos.")
             if limit: dlp_videos = dlp_videos[:limit]
             return dlp_videos
-        else:
-            print(f"  yt-dlp found 0 videos.")
-    except Exception as e:
-        print(f"  yt-dlp fallback failed: {e}")
+        else: print(f"  yt-dlp found 0 videos.")
+    except Exception as e: print(f"  yt-dlp fallback failed: {e}")
 
-    # 4. HTML Scraping (Last Resort)
     videos = scrape_videos_fallback(channel_id, hours)
     if limit: videos = videos[:limit]
     return videos
-
-if __name__ == "__main__":
-    # Test with a known active channel ID
-    channel_id = "UCM8BcGB6BWKq3utIMhGKnUA" 
-    print(f"Testing get_recent_videos for {channel_id}...")
-    videos = get_recent_videos(channel_id, hours=48)
-    print(f"Found {len(videos)} videos:")
-    for v in videos:
-        print(f"- {v['title']} ({v['published']})")
