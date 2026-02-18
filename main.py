@@ -255,8 +255,6 @@ def main():
                     print(f"  Video is long ({duration}s). Preferring text subtitles to save tokens.")
                     use_multimodal = False
                     
-                result = None
-                
                 try: # Wrap multimodal attempt in try-except
                     if use_multimodal:
                         print(f"  Attempting Multimodal Video Analysis...")
@@ -268,8 +266,7 @@ def main():
                             if isinstance(result, dict) and result.get('summary', '').startswith("Error") and "token" in result.get('summary', '').lower():
                                  print("  Multimodal failed due to token limit. Falling back to subtitles...")
                                  use_multimodal = False # Trigger fallback
-                            
-                            
+                    
                     # Fallback to Subtitles (if Long OR Multimodal Failed)
                     if not use_multimodal or not result or (isinstance(result, dict) and result.get('political_leaning') == "Error"):
                         if not use_multimodal:
@@ -284,25 +281,25 @@ def main():
                         else:
                             print("  Could not get subtitles. Attempting Audio-Only Analysis (Last Resort)...")
                             # Audio-Only Fallback
-                            try:
-                                audio_file = video_loader.process_audio(video['link'])
-                                if audio_file:
-                                    print("  Audio uploaded. Analyzing audio content...")
-                                    # Use summarize_video but with audio file (same prompt works for multimodal)
-                                    result = summarize_video(audio_file, video['title'])
-                                else:
-                                     result = {"is_political": False, "summary": "Audio processing failed.", "political_leaning": "Error"}
-                            except Exception as e:
-                                print(f"  Audio analysis failed: {e}")
-                                result = {"is_political": False, "summary": f"Every method failed (Transcript, Video, Subtitles, Audio): {e}", "political_leaning": "Error"}
+                            audio_file = video_loader.process_audio(video['link'])
+                            if audio_file:
+                                print("  Audio uploaded. Analyzing audio content...")
+                                result = summarize_video(audio_file, video['title'])
+                            else:
+                                print("  Audio processing failed.")
+                                result = {"is_political": True, "summary": "Technical Failure: All methods (Transcript, Video, Subtitles, Audio) failed. This is likely due to YouTube's bot detection blocking the cloud environment.", "political_leaning": "Analysis Failed", "analysis_failed": True}
 
                 except Exception as e:
-                    print(f"  Multimodal analysis failed: {e}")
-                    result = {"is_political": False, "summary": f"Analysis failed (No Transcript & Video Analysis Error: {e}).", "political_leaning": "Error"}
+                    print(f"  Critical error during analysis of {video['title']}: {e}")
+                    result = {"is_political": True, "summary": f"Critical error during analysis: {e}", "political_leaning": "Analysis Failed", "analysis_failed": True}
+
             else:
-                print(f"  Summarizing and analyzing political relevance...")
-                # Pass title to summarizer
+                # 4. If Transcript Exists, Analyze it
                 result = summarize_transcript(transcript, video['title'])
+
+            # 5. Final Check: Ensure result exists
+            if not result:
+                result = {"is_political": True, "summary": "Technical Failure: No analysis result could be generated.", "political_leaning": "Analysis Failed", "analysis_failed": True}
             
             # Check if it returns a dict (JSON) or string (error/legacy)
             if isinstance(result, dict):

@@ -34,6 +34,11 @@ def download_video(video_url, output_path="temp_video"):
         'extractor_args': {'youtube': {'player_client': ['android', 'ios']}}, # Cycle clients to avoid blocks
     }
 
+    # Add cookies if cookies.txt exists
+    if os.path.exists('cookies.txt'):
+        ydl_opts['cookiefile'] = 'cookies.txt'
+        print("  [DEBUG] Using cookies.txt for authentication.")
+
     print(f"  Downloading video for multimodal analysis: {video_url}...")
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -72,6 +77,9 @@ def download_audio(video_url, output_path="temp_audio"):
             'preferredcodec': 'mp3',
         }],
     }
+
+    if os.path.exists('cookies.txt'):
+        ydl_opts['cookiefile'] = 'cookies.txt'
     
     print(f"  Downloading AUDIO only (token optimization): {video_url}...")
     try:
@@ -198,6 +206,9 @@ def download_subtitles_text(video_url):
         'no_warnings': True,
         'nocheckcertificate': True,
     }
+
+    if os.path.exists('cookies.txt'):
+        ydl_opts['cookiefile'] = 'cookies.txt'
     
     print(f"  Attempting to download subtitles via yt-dlp: {video_url}...")
     try:
