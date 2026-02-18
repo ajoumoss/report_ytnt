@@ -20,8 +20,13 @@ jobs:
         python-version: '3.10'
 
     - name: Set up cookies
-      if: ${{ secrets.YOUTUBE_COOKIES != '' }}
-      run: printf "%b" "${{ secrets.YOUTUBE_COOKIES }}" > cookies.txt
+      run: |
+        if [ -n "${{ secrets.YOUTUBE_COOKIES }}" ]; then
+          printf "%b" "${{ secrets.YOUTUBE_COOKIES }}" > cookies.txt
+          echo "Cookies set up successfully."
+        else
+          echo "YOUTUBE_COOKIES secret is empty. Skipping cookies setup."
+        fi
 
     - name: Install dependencies
       run: |
