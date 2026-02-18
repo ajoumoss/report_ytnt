@@ -45,5 +45,7 @@ jobs:
         EMAIL_SENDER: ${{ secrets.EMAIL_SENDER }}
         EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
         EMAIL_RECIPIENT: ${{ secrets.EMAIL_RECIPIENT }}
+        YOUTUBE_PO_TOKEN: ${{ secrets.YOUTUBE_PO_TOKEN }}
+        YOUTUBE_USER_AGENT: ${{ secrets.YOUTUBE_USER_AGENT }}
       run: |
         python main.py --hours 24

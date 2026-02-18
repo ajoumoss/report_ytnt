@@ -24,13 +24,15 @@ def download_video(video_url, output_path="temp_video"):
         except:
             pass
 
+    user_agent = os.getenv("YOUTUBE_USER_AGENT", 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36')
+    
     ydl_opts = {
         'format': 'bestvideo[height<=360]+bestaudio/best[height<=360]/best', # More robust format selection
         'outtmpl': f'{output_path}.%(ext)s',
         'quiet': True,
         'no_warnings': True,
         'nocheckcertificate': True,
-        'user_agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+        'user_agent': user_agent,
         'extractor_args': {'youtube': {'player_client': ['web', 'android', 'ios']}},
     }
 
@@ -77,6 +79,8 @@ def download_audio(video_url, output_path="temp_audio"):
         except:
             pass
             
+    user_agent = os.getenv("YOUTUBE_USER_AGENT", 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36')
+
     ydl_opts = {
         'format': 'bestaudio/best',
         'outtmpl': f'{output_path}.%(ext)s',
@@ -87,7 +91,7 @@ def download_audio(video_url, output_path="temp_audio"):
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'mp3',
         }],
-        'user_agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+        'user_agent': user_agent,
         'extractor_args': {'youtube': {'player_client': ['web', 'android', 'ios']}},
     }
 
@@ -215,6 +219,8 @@ def download_subtitles_text(video_url):
         except:
             pass
             
+    user_agent = os.getenv("YOUTUBE_USER_AGENT", 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36')
+
     ydl_opts = {
         'skip_download': True,
         'writeautomaticsub': True,
@@ -225,7 +231,7 @@ def download_subtitles_text(video_url):
         'no_warnings': True,
         'no_warnings': True,
         'nocheckcertificate': True,
-        'user_agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+        'user_agent': user_agent,
         'extractor_args': {'youtube': {'player_client': ['web', 'android', 'ios']}},
     }
 

@@ -58,9 +58,11 @@ def get_channel_profile_pic(channel_id, api_key=None):
 
     # 3. Fallback to yt-dlp (Last resort, prone to blocking)
     try:
+        user_agent = os.getenv("YOUTUBE_USER_AGENT", 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36')
+        
         ydl_opts = {
             'quiet': True, 'skip_download': True, 'extract_flat': True, 'nocheckcertificate': True,
-            'user_agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+            'user_agent': user_agent,
             'extractor_args': {'youtube': {'player_client': ['web', 'android', 'ios']}},
         }
         
