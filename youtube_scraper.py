@@ -165,7 +165,8 @@ def scrape_videos_fallback(channel_id, hours=24):
                      view_count = view_count.replace(" views", "").replace(" view", "").replace("조회수 ", "").replace("회", "")
                 
                 # Check hours
-                if (now - published).total_seconds() < hours * 3600:
+                time_diff = (now - published).total_seconds()
+                if time_diff < hours * 3600:
                     videos.append({
                         'video_id': videoId,
                         'title': title,
@@ -176,6 +177,8 @@ def scrape_videos_fallback(channel_id, hours=24):
                         'subscriber_count': sub_count,
                         'view_count': view_count
                     })
+                else:
+                    print(f"    Skipping video (too old): {title} ({time_diff/3600:.1f} hours ago)")
                 count += 1
             except Exception as e:
                 continue
@@ -231,10 +234,11 @@ def get_recent_videos(channel_id, hours=24, limit=None):
                 published = published.replace(tzinfo=pytz.utc)
             
             # Check if video is within the last 'hours'
-            if (now - published).total_seconds() < hours * 3600:
+            time_diff = (now - published).total_seconds()
+            if time_diff < hours * 3600:
                 # Check if it is a Short
                 if is_short(entry.yt_videoid):
-                    print(f"Skipping Short: {entry.title}")
+                    print(f"  Skipping Short: {entry.title}")
                     continue
 
                 # Try to get view count from media_statistics
@@ -252,6 +256,10 @@ def get_recent_videos(channel_id, hours=24, limit=None):
                     'subscriber_count': sub_count,
                     'view_count': view_count
                 })
+            else:
+                # Optional: print only if it's borderline or for debug
+                # print(f"  Skipping video (too old): {entry.title} ({time_diff/3600:.1f} hours ago)")
+                pass
         except Exception as e:
             print(f"Error parsing entry: {e}")
             continue

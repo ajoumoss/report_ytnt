@@ -1,7 +1,17 @@
+# Python
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+.venv/
 .env
-venv/
-.DS_Store
+
+# Temporary Media Files
+temp_video*
+temp_audio*
+*.part
+*.mp4
+*.mp3
+*.m4a
+DS_Store
 report.md
 media__*.png

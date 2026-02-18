@@ -132,7 +132,7 @@ def upload_to_notion(report_data):
     database_id = os.getenv("NOTION_DATABASE_ID")
 
     if not notion_api_key or not database_id:
-        print("Notion credentials missing. Skipping upload.")
+        print("CRITICAL: Notion credentials missing (NOTION_API_KEY or NOTION_DATABASE_ID). Skipping upload.")
         return
 
     notion = Client(auth=notion_api_key)
@@ -141,6 +141,9 @@ def upload_to_notion(report_data):
     schema, title_prop = get_schema_and_map(notion, database_id)
     
     print(f"Uploading {len(report_data)} items to Notion...")
+    
+    success_count = 0
+    fail_count = 0
     
     for video in report_data:
         try:
@@ -308,8 +311,10 @@ def upload_to_notion(report_data):
                 children=children
             )
             print(f"  Uploaded: {video.get('title')}")
+            success_count += 1
             
         except Exception as e:
             print(f"Failed to upload {video.get('title')}: {e}")
+            fail_count += 1
 
-    print(f"Notion Upload Complete: {len(report_data)} items.")
+    print(f"\nNotion Upload Result: {success_count} success, {fail_count} failed out of {len(report_data)} items.")

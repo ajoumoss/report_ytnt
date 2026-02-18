@@ -9,6 +9,9 @@ from transcript_fetcher import get_transcript
 from llm_summarizer import summarize_transcript
 from report_generator import generate_report
 from notion_uploader import upload_to_notion
+from sync_channels import sync_channels
+import video_loader
+from llm_summarizer import summarize_transcript, summarize_video
 import json
 import markdown
 
@@ -188,6 +191,10 @@ def main():
     parser.add_argument("--filter", type=str, help="Filter channels by name (partial match)")
     args = parser.parse_args()
 
+    # Sync Channels first
+    print("Syncing channels from channels.txt...")
+    sync_channels()
+
     # Load channels
     with open('channels.json', 'r') as f:
         channels_data = json.load(f)
@@ -202,7 +209,7 @@ def main():
     print(f"Checking {len(channels)} channels...")
 
     processed_videos = []
-
+    total_found = 0
     for channel in channels:
         # Determine lookback hours: use channel specific if exists, else argument default
         lookback = channel.get('lookback_hours', args.hours)
@@ -210,6 +217,7 @@ def main():
         print(f"Checking channel: {channel['name']} ({channel.get('political_leaning', 'N/A')}) - Last {lookback} hours (Limit: {limit})...")
         
         videos = get_recent_videos(channel['channel_id'], hours=lookback, limit=limit)
+        total_found += len(videos)
         
         for video in videos:
             # Fix Unknown channel name if it occurs (e.g. fallback scraping)
@@ -221,12 +229,74 @@ def main():
             transcript = get_transcript(video['video_id'])
             
             if not transcript:
-                print(f"  No transcript found. Attempting summary based on title...")
-                transcript = f"Transcript not available. Please assist by summarizing or classifying based on the Video Title: {video['title']}."
+                # 2. If Transcript Fails, Try Smart Fallback
+                print("  No transcript found. Checking video details...")
+                
+                import video_loader
+                
+                # Check Duration First
+                video_info = video_loader.get_video_info(video['link'])
+                duration = 0
+                if video_info:
+                    duration = video_info.get('duration', 0)
+                    
+                # Decision Logic:
+                # If > 50 mins (approx 3000s) -> Text Subtitles (to avoid token limit/cost)
+                # Else -> Multimodal (better quality)
+                
+                use_multimodal = True
+                if duration > 3000:
+                    print(f"  Video is long ({duration}s). Preferring text subtitles to save tokens.")
+                    use_multimodal = False
+                    
+                result = None
+                
+                try: # Wrap multimodal attempt in try-except
+                    if use_multimodal:
+                        print(f"  Attempting Multimodal Video Analysis...")
+                        gemini_file = video_loader.process_video(video['link'])
+                        if gemini_file:
+                            result = summarize_video(gemini_file, video['title'])
+                            
+                            # Check for Token Limit Error in Result
+                            if isinstance(result, dict) and result.get('summary', '').startswith("Error") and "token" in result.get('summary', '').lower():
+                                 print("  Multimodal failed due to token limit. Falling back to subtitles...")
+                                 use_multimodal = False # Trigger fallback
+                            
+                            
+                    # Fallback to Subtitles (if Long OR Multimodal Failed)
+                    if not use_multimodal or not result or (isinstance(result, dict) and result.get('political_leaning') == "Error"):
+                        if not use_multimodal:
+                            print("  Fetching subtitles via yt-dlp...")
+                        else:
+                            print("  Multimodal failed. Falling back to subtitles...")
+                            
+                        forced_transcript = video_loader.download_subtitles_text(video['link'])
+                        if forced_transcript:
+                            print("  Subtitles downloaded successfully.")
+                            result = summarize_transcript(forced_transcript, video['title'])
+                        else:
+                            print("  Could not get subtitles. Attempting Audio-Only Analysis (Last Resort)...")
+                            # Audio-Only Fallback
+                            try:
+                                audio_file = video_loader.process_audio(video['link'])
+                                if audio_file:
+                                    print("  Audio uploaded. Analyzing audio content...")
+                                    # Use summarize_video but with audio file (same prompt works for multimodal)
+                                    result = summarize_video(audio_file, video['title'])
+                                else:
+                                     result = {"is_political": False, "summary": "Audio processing failed.", "political_leaning": "Error"}
+                            except Exception as e:
+                                print(f"  Audio analysis failed: {e}")
+                                result = {"is_political": False, "summary": f"Every method failed (Transcript, Video, Subtitles, Audio): {e}", "political_leaning": "Error"}
 
-            print(f"  Summarizing and analyzing political relevance...")
-            # Pass title to summarizer
-            result = summarize_transcript(transcript, video['title'])
+                except Exception as e:
+                    print(f"  Multimodal analysis failed: {e}")
+                    result = {"is_political": False, "summary": f"Analysis failed (No Transcript & Video Analysis Error: {e}).", "political_leaning": "Error"}
+            else:
+                print(f"  Summarizing and analyzing political relevance...")
+                # Pass title to summarizer
+                result = summarize_transcript(transcript, video['title'])
             
             # Check if it returns a dict (JSON) or string (error/legacy)
             if isinstance(result, dict):
@@ -248,6 +318,10 @@ def main():
                     if result.get("cast"):
                         video['cast'] = result.get("cast")
                         
+                    # Store Token Usage
+                    if result.get("token_usage"):
+                        video['token_usage'] = result.get("token_usage")
+                        
                     # Ensure stats are preserved (passed through from scraper)
                     # They are already in video dict
                         
@@ -260,10 +334,27 @@ def main():
                 video['political_leaning'] = channel.get('political_leaning', 'Unknown')
                 processed_videos.append(video)
 
+    # Calculate Total Token Usage
     if processed_videos:
         print(f"Generating report for {len(processed_videos)} videos...")
         report_content = generate_report(processed_videos)
         
+        # Calculate Token Usage for Email
+        prompt_tokens = 0
+        candidate_tokens = 0
+        total_tokens = 0
+        
+        for v in processed_videos:
+            use = v.get('token_usage', {})
+            prompt_tokens += use.get('prompt_tokens', 0)
+            candidate_tokens += use.get('candidate_tokens', 0)
+            total_tokens += use.get('total_tokens', 0)
+            
+        token_summary = f"\n\n[Token Usage] Input: {prompt_tokens:,}, Output: {candidate_tokens:,}, Total: {total_tokens:,}"
+        print(token_summary)
+        
+        report_content += f"\n\n---\n**LLM Token Usage:** Total {total_tokens:,} (Input {prompt_tokens:,} / Output {candidate_tokens:,})"
+
         with open("report.md", "w") as f:
             f.write(report_content)
         

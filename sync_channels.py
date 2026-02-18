@@ -82,7 +82,7 @@ def sync_channels():
             name = parts[0]
             id_or_url = parts[1]
             leaning = parts[2] if len(parts) > 2 else "Unknown"
-            max_videos = int(parts[3]) if len(parts) > 3 and parts[3].isdigit() else 3
+            max_videos = int(parts[3]) if len(parts) > 3 and parts[3].isdigit() else 10
             
             # Resolve ID if needed
             channel_id = get_channel_id_from_url(id_or_url)
@@ -99,7 +99,7 @@ def sync_channels():
                 
             name = fetched_name if fetched_name else "Unknown Channel"
             leaning = "Unknown" # Will be determined by LLM per video
-            max_videos = 3
+            max_videos = 10
 
         if channel_id:
             # Check for duplicates
