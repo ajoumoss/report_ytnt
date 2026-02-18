@@ -237,6 +237,9 @@ def main():
                 
             print(f"  Found video: {video['title']}")
             
+            # 0. RANDOM DELAY to mimic human behavior and avoid bot detection
+            import random
+            delay = random.uniform(5, 15)
             print(f"  [ANTI-BOT] Waiting {delay:.1f}s before processing...")
             time.sleep(delay)
             
