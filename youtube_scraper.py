@@ -58,7 +58,11 @@ def get_channel_profile_pic(channel_id, api_key=None):
 
     # 3. Fallback to yt-dlp (Last resort, prone to blocking)
     try:
-        ydl_opts = {'quiet': True, 'skip_download': True, 'extract_flat': True, 'nocheckcertificate': True}
+        ydl_opts = {
+            'quiet': True, 'skip_download': True, 'extract_flat': True, 'nocheckcertificate': True,
+            'user_agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+            'extractor_args': {'youtube': {'player_client': ['web', 'android', 'ios']}},
+        }
         if os.path.exists('cookies.txt'):
             ydl_opts['cookiefile'] = 'cookies.txt'
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -213,7 +217,9 @@ def scrape_ytdlp(channel_id, api_key=None, hours=24, limit=10):
     
     ydl_opts = {
         'quiet': True, 'extract_flat': 'in_playlist', 'playlistend': 50, 'ignoreerrors': True,
-        'nocheckcertificate': True, 'extractor_args': {'youtube': {'player_client': ['android', 'ios', 'web']}},
+        'nocheckcertificate': True, 
+        'user_agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+        'extractor_args': {'youtube': {'player_client': ['web', 'android', 'ios']}},
     }
     if os.path.exists('cookies.txt'):
         ydl_opts['cookiefile'] = 'cookies.txt'

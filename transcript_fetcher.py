@@ -13,6 +13,9 @@ def get_transcript(video_id):
     try:
         cookies_path = 'cookies.txt'
         session = requests.Session()
+        session.headers.update({
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        })
         
         if os.path.exists(cookies_path):
             print(f"  [DEBUG] Using {cookies_path} for transcript fetching.")

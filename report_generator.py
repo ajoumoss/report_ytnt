@@ -34,13 +34,13 @@ def generate_report(videos):
         # Subscriber & View Count (Row 2.5)
         stats = []
         if video.get('subscriber_count'):
-            sub_text = video['subscriber_count']
+            sub_text = str(video['subscriber_count'])
             if not sub_text.startswith("구독자"):
                 sub_text = f"구독자 {sub_text}"
             stats.append(sub_text)
             
         if video.get('view_count'):
-            view_text = video['view_count']
+            view_text = str(video['view_count'])
             if not view_text.startswith("조회수"):
                 view_text = f"조회수 {view_text}"
             stats.append(view_text)
