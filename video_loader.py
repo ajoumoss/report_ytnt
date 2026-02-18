@@ -30,7 +30,6 @@ def download_video(video_url, output_path="temp_video"):
         'quiet': True,
         'no_warnings': True,
         'nocheckcertificate': True,
-        'ignoreerrors': True,
         'user_agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
         'extractor_args': {'youtube': {'player_client': ['web', 'android', 'ios']}},
     }
@@ -78,7 +77,6 @@ def download_audio(video_url, output_path="temp_audio"):
         'quiet': True,
         'no_warnings': True,
         'nocheckcertificate': True,
-        'ignoreerrors': True,
         'postprocessors': [{  # Extract audio using ffmpeg
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'mp3',
