@@ -34,22 +34,18 @@ def download_video(video_url, output_path="temp_video"):
         'extractor_args': {'youtube': {'player_client': ['web', 'android', 'ios']}},
     }
 
-    # Prioritize OAuth2 Cache if available
-    if os.path.exists('yt_auth_cache'):
-        print("  [DEBUG] Using OAuth2 Cache for authentication.")
-        ydl_opts['cache_dir'] = 'yt_auth_cache'
-    
-    # Fallback to cookies if cookies.txt exists and no OAuth2
-    elif os.path.exists('cookies.txt'):
+    # Prioritize cookies if available
+    if os.path.exists('cookies.txt'):
         ydl_opts['cookiefile'] = 'cookies.txt'
         print(f"  [DEBUG] Using cookies.txt for authentication. Size: {os.path.getsize('cookies.txt')} bytes")
-    # Fallback to po_token
+    
+    # Add po_token if available (Optional for extra stability)
     elif os.getenv("YOUTUBE_PO_TOKEN"):
          po_token = os.getenv("YOUTUBE_PO_TOKEN")
          print(f"  [DEBUG] Applying po_token to yt-dlp request...")
          ydl_opts['extractor_args']['youtube']['po_token'] = [f"web+{po_token}"]
     else:
-        print("  [DEBUG] No authentication method found (OAuth2/Cookies/PO Token).")
+        print("  [DEBUG] No authentication method found (Cookies/PO Token).")
 
     print(f"  Downloading video for multimodal analysis: {video_url}...")
     try:

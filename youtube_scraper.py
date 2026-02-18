@@ -64,17 +64,14 @@ def get_channel_profile_pic(channel_id, api_key=None):
             'extractor_args': {'youtube': {'player_client': ['web', 'android', 'ios']}},
         }
         
-        # Prioritize OAuth2 Cache
-        if os.path.exists('yt_auth_cache'):
-             ydl_opts['cache_dir'] = 'yt_auth_cache'
-        elif os.getenv("YOUTUBE_PO_TOKEN"):
-             po_token = os.getenv("YOUTUBE_PO_TOKEN")
-             ydl_opts['extractor_args']['youtube']['po_token'] = [f"web+{po_token}"]
-        
-        if os.path.exists('cookies.txt') and not os.path.exists('yt_auth_cache'):
+        if os.path.exists('cookies.txt'):
              ydl_opts['cookiefile'] = 'cookies.txt'
+        
+        # Add po_token if available (fallback)
+        po_token = os.getenv("YOUTUBE_PO_TOKEN")
+        if po_token:
+             ydl_opts['extractor_args']['youtube']['po_token'] = [f"web+{po_token}"]
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(f"https://www.youtube.com/channel/{channel_id}", download=False)
             pic_url = info.get('thumbnails', [{}])[-1].get('url', "https://www.gstatic.com/youtube/img/branding/favicon/favicon_144x144.png")
             sub_count = str(info.get('subscriber_count', "N/A"))
             get_channel_profile_pic.cache[channel_id] = (pic_url, sub_count)
