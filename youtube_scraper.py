@@ -115,9 +115,9 @@ def get_recent_videos_api(channel_id, api_key, hours=24, limit=10):
     try:
         youtube = googleapiclient.discovery.build("youtube", "v3", developerKey=api_key)
         
-        # Calculate time cutoff
+        # Calculate time cutoff (Strict RFC 3339 format with Z suffix)
         now = datetime.datetime.now(pytz.utc)
-        published_after = (now - datetime.timedelta(hours=hours)).isoformat()
+        published_after = (now - datetime.timedelta(hours=hours)).strftime('%Y-%m-%dT%H:%M:%SZ')
         
         print(f"  [API] Published after: {published_after}")
         
